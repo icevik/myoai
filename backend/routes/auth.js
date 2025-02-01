@@ -125,29 +125,14 @@ const registerValidation = [
 // Giriş
 router.post('/login', loginValidation, async (req, res) => {
   try {
-    // Debug için gelen isteği logla
-    console.log('Login isteği:', req.body);
-
-    // Validasyon kontrolü
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log('Validasyon hataları:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
     const { email, password } = req.body;
     
-    // Kullanıcıyı bul
     const user = await User.findOne({ email });
-    console.log('Bulunan kullanıcı:', user ? {
-      id: user._id,
-      email: user.email,
-      role: user.role,
-      isApproved: user.isApproved,
-      loginAttempts: user.loginAttempts,
-      lockUntil: user.lockUntil
-    } : null);
-
     if (!user) {
       return res.status(401).json({ message: 'Email veya şifre hatalı' });
     }
@@ -155,29 +140,20 @@ router.post('/login', loginValidation, async (req, res) => {
     // Hesap kilitli mi kontrol et
     if (user.isLocked()) {
       const lockTime = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
-      console.log('Hesap kilitli:', { lockTime });
       return res.status(401).json({ 
         message: `Hesabınız kilitlendi. ${lockTime} dakika sonra tekrar deneyin.` 
       });
     }
 
     // Hesap onaylı mı kontrol et
-    if (!user.isApproved) {
-      console.log('Hesap onaylı değil');
+    if (!user.isApproved && user.role !== 'admin') {
       return res.status(401).json({ message: 'Hesabınız henüz onaylanmamış' });
     }
 
     // Şifre kontrolü
-    console.log('Şifre kontrolü yapılıyor...');
     const isMatch = await user.comparePassword(password);
-    console.log('Şifre eşleşmesi:', isMatch);
-
     if (!isMatch) {
       await user.incrementLoginAttempts();
-      console.log('Başarısız giriş denemesi:', {
-        loginAttempts: user.loginAttempts,
-        lockUntil: user.lockUntil
-      });
       
       if (user.isLocked()) {
         return res.status(401).json({ 
@@ -190,7 +166,6 @@ router.post('/login', loginValidation, async (req, res) => {
 
     // Başarılı giriş
     await user.successfulLogin();
-    console.log('Başarılı giriş');
     
     // Token oluştur
     const token = generateToken(user);
@@ -207,15 +182,14 @@ router.post('/login', loginValidation, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('Login hatası:', err);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });
 
-// Kayıt talebi
-router.post('/register-request', registerValidation, async (req, res) => {
+// Admin kaydı
+router.post('/register-admin', registerValidation, async (req, res) => {
   try {
-    // Validasyon kontrolü
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -223,39 +197,80 @@ router.post('/register-request', registerValidation, async (req, res) => {
 
     const { name, email, password } = req.body;
 
-    // E-posta kullanımda mı kontrol et
+    // E-posta kontrolü
+    if (!email.endsWith('@yeditepe.edu.tr') || email.includes('std.')) {
+      return res.status(400).json({ message: 'Geçersiz admin e-posta adresi' });
+    }
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'Bu e-posta adresi zaten kullanımda' });
     }
 
-    // Admin e-postası kontrolü
-    if (email === process.env.ADMIN_EMAIL) {
-      const user = new User({
-        name,
-        email,
-        password,
-        role: 'admin',
-        isApproved: true
-      });
-      await user.save();
-      return res.status(201).json({ message: 'Admin hesabı oluşturuldu' });
-    }
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Yeni kullanıcı oluştur
     const user = new User({
       name,
       email,
-      password
+      password: hashedPassword,
+      role: 'admin',
+      isApproved: true
     });
-    await user.save();
 
-    res.status(201).json({ message: 'Kayıt talebiniz alındı. Admin onayı bekleniyor.' });
+    await user.save();
+    
+    const token = generateToken(user);
+    res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
   } catch (err) {
-    console.error('Register error:', err);
-    if (err.code === 11000) {
+    console.error('Admin kayıt hatası:', err);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+});
+
+// Kayıt talebi
+router.post('/register-request', registerValidation, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, email, password } = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return res.status(400).json({ message: 'Bu e-posta adresi zaten kullanımda' });
     }
+
+    // Öğrenci e-posta kontrolü
+    if (!email.includes('@std.yeditepe.edu.tr')) {
+      return res.status(400).json({ message: 'Geçerli bir öğrenci e-posta adresi giriniz' });
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      role: 'student',
+      isApproved: false
+    });
+
+    await user.save();
+    res.status(201).json({ message: 'Kayıt talebiniz alındı. Onay için bekleyiniz.' });
+  } catch (err) {
+    console.error('Kayıt hatası:', err);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });

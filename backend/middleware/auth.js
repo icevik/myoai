@@ -14,27 +14,15 @@ exports.protect = async (req, res, next) => {
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
       
-      // Token'ın süresinin dolmasına 1 saatten az kaldıysa yenile
-      const tokenExp = decoded.exp * 1000;
-      const now = Date.now();
-      const oneHour = 60 * 60 * 1000;
-      
-      if (tokenExp - now < oneHour) {
-        const newToken = jwt.sign({ id: decoded.id }, process.env.JWT_SECRET, {
-          expiresIn: '1d'
-        });
-        res.setHeader('X-New-Token', newToken);
-      }
-
-      const user = await User.findById(decoded.id).select('-password');
+      const user = await User.findById(decoded.userId).select('-password');
 
       if (!user) {
         return res.status(401).json({ message: 'Kullanıcı bulunamadı' });
       }
 
-      if (!user.isApproved) {
+      if (!user.isApproved && user.role !== 'admin') {
         return res.status(401).json({ message: 'Hesabınız henüz onaylanmamış' });
       }
 
@@ -56,9 +44,13 @@ exports.protect = async (req, res, next) => {
 };
 
 exports.admin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
-    next();
-  } else {
-    res.status(403).json({ message: 'Bu işlem için admin yetkisi gerekli' });
+  if (!req.user) {
+    return res.status(401).json({ message: 'Lütfen giriş yapın' });
   }
+  
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Bu işlem için admin yetkisi gerekli' });
+  }
+  
+  next();
 }; 

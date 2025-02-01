@@ -1,21 +1,35 @@
-FROM node:18-alpine
+FROM node:18-alpine as builder
 
 WORKDIR /app
 
+# Curl yükle
+RUN apk add --no-cache curl
+
+# Sadece package.json ve package-lock.json kopyala
 COPY package*.json ./
 
-RUN apk add --no-cache curl && \
-    npm install --legacy-peer-deps
+# Bağımlılıkları yükle
+RUN npm install --legacy-peer-deps --production
 
+# Kaynak kodları kopyala
 COPY . .
 
-ENV HOST=0.0.0.0
-ENV WDS_SOCKET_PORT=0
-ENV REACT_APP_API_URL=http://34.28.93.220:5000
+# Production build
+RUN npm run build
+
+# Production image
+FROM nginx:alpine
+
+# Build dosyalarını nginx'e kopyala
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD curl -f http://localhost:3000 || exit 1
 
-CMD ["npm", "start"] 
+CMD ["nginx", "-g", "daemon off;"] 

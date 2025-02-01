@@ -35,6 +35,8 @@ import {
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://34.136.154.58:5000';
+
 const Root = styled('div')(({ theme }) => ({
   flexGrow: 1,
   backgroundColor: theme.palette.background.default,
@@ -91,9 +93,9 @@ const AdminDashboard = () => {
 
     try {
       const [usersRes, coursesRes, conversationsRes] = await Promise.all([
-        axios.get('http://34.28.93.220:5000/api/users', config),
-        axios.get('http://34.28.93.220:5000/api/courses', config),
-        axios.get('http://34.28.93.220:5000/api/chat/all', config)
+        axios.get(`${API_URL}/users`, config),
+        axios.get(`${API_URL}/courses`, config),
+        axios.get(`${API_URL}/chat/conversations`, config)
       ]);
 
       setUsers(usersRes.data);
@@ -117,7 +119,7 @@ const AdminDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://34.28.93.220:5000/api/users/${userId}/approve`,
+        `${API_URL}/users/${userId}/approve`,
         {},
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -133,7 +135,7 @@ const AdminDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://34.28.93.220:5000/api/users/${userId}/ban`,
+        `${API_URL}/users/${userId}/ban`,
         {},
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -148,7 +150,7 @@ const AdminDashboard = () => {
   const handleAddCourse = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://34.28.93.220:5000/api/courses', courseForm, {
+      await axios.post(`${API_URL}/courses`, courseForm, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setOpenDialog(false);
@@ -170,7 +172,7 @@ const AdminDashboard = () => {
   const handleDeleteCourse = async (courseCode) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://34.28.93.220:5000/api/courses/${courseCode}`, {
+      await axios.delete(`${API_URL}/courses/${courseCode}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       loadData();

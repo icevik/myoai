@@ -24,10 +24,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: {
-      values: ['student', 'admin'],
-      message: 'Geçersiz rol'
-    },
+    enum: ['student', 'admin'],
     default: 'student'
   },
   isApproved: {
@@ -38,42 +35,22 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course'
   }],
-  lastLogin: {
-    type: Date
-  },
-  passwordResetToken: String,
-  passwordResetExpires: Date,
   loginAttempts: {
     type: Number,
     default: 0
   },
   lockUntil: {
     type: Date
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
 }, {
   timestamps: true
 });
 
-// Şifre hashleme middleware
+// Şifre hashleme
 userSchema.pre('save', async function(next) {
-  // Şifre değişmediyse veya yeni kayıt değilse
   if (!this.isModified('password')) return next();
   
   try {
-    // Şifre güvenlik seviyesi kontrolü
-    if (this.password.length < 6) {
-      throw new Error('Şifre en az 6 karakter olmalıdır');
-    }
-    
-    // Şifreyi hashle
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
     next();
@@ -82,17 +59,11 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Şifre karşılaştırma metodu
+// Şifre karşılaştırma
 userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
-    console.log('Şifre karşılaştırılıyor:');
-    console.log('- Hash\'lenmiş şifre:', this.password);
-    console.log('- Gelen şifre:', candidatePassword);
-    const isMatch = await bcrypt.compare(candidatePassword, this.password);
-    console.log('- Eşleşme sonucu:', isMatch);
-    return isMatch;
+    return await bcrypt.compare(candidatePassword, this.password);
   } catch (error) {
-    console.error('Şifre karşılaştırma hatası:', error);
     throw new Error('Şifre karşılaştırma hatası');
   }
 };
@@ -102,9 +73,8 @@ userSchema.methods.isLocked = function() {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 };
 
-// Giriş denemesi başarısız olduğunda
+// Giriş denemesi başarısız
 userSchema.methods.incrementLoginAttempts = async function() {
-  // Kilit süresi geçmişse
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return await this.updateOne({
       $set: {
@@ -114,28 +84,21 @@ userSchema.methods.incrementLoginAttempts = async function() {
     });
   }
   
-  // Kilit süresi devam ediyorsa
-  const updates = {
-    $inc: { loginAttempts: 1 }
-  };
+  const updates = { $inc: { loginAttempts: 1 } };
   
-  // 5 başarısız deneme sonrası hesabı kilitle (1 saat)
   if (this.loginAttempts + 1 >= 5 && !this.isLocked()) {
-    updates.$set = {
-      lockUntil: Date.now() + 3600000 // 1 saat
-    };
+    updates.$set = { lockUntil: Date.now() + 3600000 };
   }
   
   return await this.updateOne(updates);
 };
 
-// Başarılı giriş sonrası
+// Başarılı giriş
 userSchema.methods.successfulLogin = async function() {
   return await this.updateOne({
     $set: {
       loginAttempts: 0,
-      lockUntil: null,
-      lastLogin: new Date()
+      lockUntil: null
     }
   });
 };

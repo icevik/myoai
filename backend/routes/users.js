@@ -9,6 +9,7 @@ router.get('/', protect, admin, async (req, res) => {
     const users = await User.find().select('-password');
     res.json(users);
   } catch (error) {
+    console.error('Kullanıcılar yüklenirken hata:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });
@@ -28,16 +29,21 @@ router.put('/:id/approve', protect, admin, async (req, res) => {
 
     res.json(user);
   } catch (error) {
+    console.error('Kullanıcı onaylanırken hata:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });
 
-// Kullanıcı banla (Admin only)
+// Kullanıcı banlama (Admin only)
 router.put('/:id/ban', protect, admin, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { isApproved: false },
+      {
+        isApproved: false,
+        loginAttempts: 5,
+        lockUntil: Date.now() + 3600000 // 1 saat
+      },
       { new: true }
     ).select('-password');
 
@@ -47,11 +53,36 @@ router.put('/:id/ban', protect, admin, async (req, res) => {
 
     res.json(user);
   } catch (error) {
+    console.error('Kullanıcı banlanırken hata:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });
 
-// Kullanıcı sil (Admin only)
+// Kullanıcı ban kaldırma (Admin only)
+router.put('/:id/unban', protect, admin, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      {
+        isApproved: true,
+        loginAttempts: 0,
+        lockUntil: null
+      },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Kullanıcı banı kaldırılırken hata:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+});
+
+// Kullanıcı silme (Admin only)
 router.delete('/:id', protect, admin, async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -62,6 +93,7 @@ router.delete('/:id', protect, admin, async (req, res) => {
 
     res.json({ message: 'Kullanıcı başarıyla silindi' });
   } catch (error) {
+    console.error('Kullanıcı silinirken hata:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });

@@ -1,99 +1,74 @@
 import React, { useState, useEffect } from 'react';
-import { useHistory } from 'react-router-dom';
 import {
   Container,
   Grid,
   Paper,
+  Typography,
   List,
   ListItem,
   ListItemText,
-  Typography,
+  ListItemIcon,
+  Divider,
   TextField,
   Button,
   IconButton,
   AppBar,
   Toolbar,
-  Drawer,
+  Box,
   styled
 } from '@mui/material';
-import { Send as SendIcon, Logout as LogoutIcon } from '@mui/icons-material';
+import {
+  Send as SendIcon,
+  School as SchoolIcon,
+  Person as PersonIcon,
+  Logout as LogoutIcon
+} from '@mui/icons-material';
 import axios from 'axios';
+import { useHistory } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
-const drawerWidth = 240;
+const API_URL = process.env.REACT_APP_API_URL || 'http://34.136.154.58:5000';
 
 const Root = styled('div')(({ theme }) => ({
   display: 'flex',
-  height: '100vh'
+  minHeight: '100vh'
 }));
 
-const StyledAppBar = styled(AppBar)(({ theme }) => ({
-  zIndex: theme.zIndex.drawer + 1
-}));
-
-const StyledDrawer = styled(Drawer)(({ theme }) => ({
-  width: drawerWidth,
-  flexShrink: 0,
-  '& .MuiDrawer-paper': {
-    width: drawerWidth
-  }
-}));
-
-const DrawerContainer = styled('div')({
-  overflow: 'auto'
-});
-
-const Content = styled('main')(({ theme }) => ({
-  flexGrow: 1,
-  padding: theme.spacing(3)
-}));
-
-const ChatContainer = styled('div')(({ theme }) => ({
-  height: 'calc(100vh - 180px)',
+const Sidebar = styled(Paper)(({ theme }) => ({
+  width: 240,
+  padding: theme.spacing(2),
   display: 'flex',
   flexDirection: 'column'
 }));
 
-const MessageList = styled(Paper)(({ theme }) => ({
+const ChatContainer = styled(Paper)(({ theme }) => ({
   flexGrow: 1,
-  overflow: 'auto',
+  padding: theme.spacing(2),
+  display: 'flex',
+  flexDirection: 'column',
+  height: 'calc(100vh - 64px)'
+}));
+
+const MessageList = styled(Box)(({ theme }) => ({
+  flexGrow: 1,
+  overflowY: 'auto',
+  marginBottom: theme.spacing(2),
   padding: theme.spacing(2)
 }));
 
-const MessageItem = styled('div')(({ theme }) => ({
-  marginBottom: theme.spacing(1)
-}));
-
-const UserMessage = styled(Paper)(({ theme }) => ({
-  backgroundColor: theme.palette.primary.light,
-  color: '#fff',
-  borderRadius: '20px 20px 0 20px',
-  padding: theme.spacing(1, 2)
-}));
-
-const BotMessage = styled(Paper)(({ theme }) => ({
-  backgroundColor: theme.palette.grey[200],
-  borderRadius: '20px 20px 20px 0',
-  padding: theme.spacing(1, 2)
-}));
-
-const InputContainer = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(2),
-  backgroundColor: '#fff',
-  borderTop: `1px solid ${theme.palette.divider}`
-}));
-
-const StyledTextField = styled(TextField)(({ theme }) => ({
-  marginRight: theme.spacing(1)
-}));
-
-const Title = styled(Typography)(({ theme }) => ({
-  flexGrow: 1
+const MessageBubble = styled(Paper)(({ theme, isUser }) => ({
+  padding: theme.spacing(1, 2),
+  marginBottom: theme.spacing(1),
+  maxWidth: '70%',
+  alignSelf: isUser ? 'flex-end' : 'flex-start',
+  backgroundColor: isUser ? theme.palette.primary.main : theme.palette.grey[200],
+  color: isUser ? theme.palette.primary.contrastText : theme.palette.text.primary
 }));
 
 const Dashboard = () => {
   const history = useHistory();
   const { user, logout } = useAuth();
+  const [categories, setCategories] = useState(['INP', 'MEC', 'AUT', 'ELT']);
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -113,29 +88,24 @@ const Dashboard = () => {
   const loadCourses = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://34.28.93.220:5000/api/courses', {
+      const response = await axios.get(`${API_URL}/courses`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setCourses(res.data);
+      setCourses(response.data);
     } catch (error) {
       console.error('Dersler yüklenirken hata:', error);
     }
   };
 
   const loadMessages = async () => {
+    if (!selectedCourse) return;
+
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(
-        `http://34.28.93.220:5000/api/chat/history/${selectedCourse.code}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-      if (res.data.length > 0) {
-        setMessages(res.data[0].messages);
-      } else {
-        setMessages([]);
-      }
+      const response = await axios.get(`${API_URL}/chat/history/${selectedCourse.code}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMessages(response.data.flatMap(conv => conv.messages));
     } catch (error) {
       console.error('Mesajlar yüklenirken hata:', error);
     }
@@ -148,18 +118,16 @@ const Dashboard = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await axios.post(
-        `http://34.28.93.220:5000/api/chat/${selectedCourse.code}`,
+      const response = await axios.post(
+        `${API_URL}/chat/${selectedCourse.code}`,
         { message: newMessage },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       setMessages([
         ...messages,
         { role: 'user', content: newMessage },
-        { role: 'bot', content: res.data.message }
+        { role: 'bot', content: response.data }
       ]);
       setNewMessage('');
     } catch (error) {
@@ -171,103 +139,108 @@ const Dashboard = () => {
 
   const handleLogout = () => {
     logout();
-    history.push('/');
+    history.push('/login');
   };
 
   return (
     <Root>
-      <StyledAppBar position="fixed">
+      <AppBar position="fixed">
         <Toolbar>
-          <Title variant="h6">
-            Chatbot Sistemi
-          </Title>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Öğrenci Paneli
+          </Typography>
+          <IconButton color="inherit" onClick={() => history.push('/profile')}>
+            <PersonIcon />
+          </IconButton>
           <IconButton color="inherit" onClick={handleLogout}>
             <LogoutIcon />
           </IconButton>
         </Toolbar>
-      </StyledAppBar>
-
-      <StyledDrawer variant="permanent">
-        <Toolbar />
-        <DrawerContainer>
-          <List>
-            {courses.map((course) => (
-              <ListItem
-                button
-                key={course.code}
-                selected={selectedCourse?.code === course.code}
-                onClick={() => setSelectedCourse(course)}
-              >
-                <ListItemText
-                  primary={course.code}
-                  secondary={course.category}
-                />
+      </AppBar>
+      <Toolbar /> {/* Boşluk için */}
+      
+      <Sidebar elevation={3}>
+        <Typography variant="h6" gutterBottom>
+          Kategoriler
+        </Typography>
+        <List>
+          {categories.map((category) => (
+            <React.Fragment key={category}>
+              <ListItem button>
+                <ListItemIcon>
+                  <SchoolIcon />
+                </ListItemIcon>
+                <ListItemText primary={category} />
               </ListItem>
-            ))}
-          </List>
-        </DrawerContainer>
-      </StyledDrawer>
+              <List component="div" disablePadding>
+                {courses
+                  .filter(course => course.category === category)
+                  .map(course => (
+                    <ListItem
+                      button
+                      key={course.code}
+                      selected={selectedCourse?.code === course.code}
+                      onClick={() => setSelectedCourse(course)}
+                      sx={{ pl: 4 }}
+                    >
+                      <ListItemText primary={course.code} />
+                    </ListItem>
+                  ))}
+              </List>
+              <Divider />
+            </React.Fragment>
+          ))}
+        </List>
+      </Sidebar>
 
-      <Content>
-        <Toolbar />
+      <ChatContainer elevation={3}>
         {selectedCourse ? (
-          <ChatContainer>
+          <>
+            <Typography variant="h6" gutterBottom>
+              {selectedCourse.code} Dersi Chatbot
+            </Typography>
             <MessageList>
               {messages.map((message, index) => (
-                <MessageItem
+                <MessageBubble
                   key={index}
-                  style={{
-                    display: 'flex',
-                    justifyContent:
-                      message.role === 'user' ? 'flex-end' : 'flex-start'
-                  }}
+                  isUser={message.role === 'user'}
+                  elevation={1}
                 >
-                  {message.role === 'user' ? (
-                    <UserMessage>
-                      <Typography>{message.content}</Typography>
-                    </UserMessage>
-                  ) : (
-                    <BotMessage>
-                      <Typography>{message.content}</Typography>
-                    </BotMessage>
-                  )}
-                </MessageItem>
+                  <Typography>{message.content}</Typography>
+                </MessageBubble>
               ))}
             </MessageList>
-            <InputContainer>
-              <form onSubmit={handleSendMessage}>
-                <Grid container spacing={2}>
-                  <Grid item xs>
-                    <StyledTextField
-                      fullWidth
-                      variant="outlined"
-                      placeholder="Mesajınızı yazın..."
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      disabled={loading}
-                    />
-                  </Grid>
-                  <Grid item>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      color="primary"
-                      disabled={loading}
-                      endIcon={<SendIcon />}
-                    >
-                      Gönder
-                    </Button>
-                  </Grid>
+            <form onSubmit={handleSendMessage}>
+              <Grid container spacing={2}>
+                <Grid item xs>
+                  <TextField
+                    fullWidth
+                    variant="outlined"
+                    placeholder="Mesajınızı yazın..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    disabled={loading}
+                  />
                 </Grid>
-              </form>
-            </InputContainer>
-          </ChatContainer>
+                <Grid item>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    endIcon={<SendIcon />}
+                    disabled={loading}
+                  >
+                    Gönder
+                  </Button>
+                </Grid>
+              </Grid>
+            </form>
+          </>
         ) : (
           <Typography variant="h6" align="center">
-            Lütfen sohbet başlatmak için bir ders seçin
+            Sohbet başlatmak için bir ders seçin
           </Typography>
         )}
-      </Content>
+      </ChatContainer>
     </Root>
   );
 };
