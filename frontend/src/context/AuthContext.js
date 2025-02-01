@@ -1,16 +1,18 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://34.28.93.220:5000';
+// API URL'ini sunucu IP'sine göre ayarla
+const API_URL = process.env.REACT_APP_API_URL || 'http://34.136.154.58:5000';
 
 // Axios instance oluştur
 const axiosInstance = axios.create({
   baseURL: API_URL,
-  timeout: 30000, // 30 saniye
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
-  }
+  },
+  withCredentials: true // CORS için önemli
 });
 
 // Request interceptor
@@ -30,11 +32,9 @@ axiosInstance.interceptors.request.use(
 // Response interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
-    // Token yenileme kontrolü
     const newToken = response.headers['x-new-token'];
     if (newToken) {
       localStorage.setItem('token', newToken);
-      console.log('Token yenilendi');
     }
     return response;
   },
@@ -47,17 +47,12 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(new Error('Ağ hatası. Lütfen internet bağlantınızı kontrol edin.'));
     }
 
-    // Token süresi dolmuşsa
-    if (error.response.status === 401 && error.response.data?.expired) {
-      localStorage.removeItem('token');
-      window.location.href = '/login?expired=true';
-      return Promise.reject(new Error('Oturum süreniz doldu. Lütfen tekrar giriş yapın.'));
-    }
-
-    // Diğer 401 hataları
     if (error.response.status === 401) {
       localStorage.removeItem('token');
-      return Promise.reject(new Error(error.response.data?.message || 'Oturum hatası'));
+      if (error.response.data?.expired) {
+        window.location.href = '/login?expired=true';
+      }
+      return Promise.reject(error.response.data?.message || 'Oturum hatası');
     }
 
     return Promise.reject(error.response.data?.message || 'Bir hata oluştu');
@@ -83,7 +78,7 @@ export const AuthProvider = ({ children }) => {
 
   const loadUser = async () => {
     try {
-      const res = await axiosInstance.get('/api/auth/profile');
+      const res = await axiosInstance.get('/auth/profile');
       setUser(res.data);
     } catch (error) {
       console.error('Profil yüklenirken hata:', error);
@@ -95,7 +90,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const res = await axiosInstance.post('/api/auth/login', {
+      const res = await axiosInstance.post('/auth/login', {
         email,
         password
       });
@@ -112,7 +107,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password) => {
     try {
-      const res = await axiosInstance.post('/api/auth/register-request', {
+      const res = await axiosInstance.post('/auth/register-request', {
         name,
         email,
         password

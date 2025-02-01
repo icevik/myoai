@@ -2,6 +2,10 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const bcrypt = require('bcryptjs');
+
+// Models
+const User = require('./models/User');
 
 // Route'ları import et
 const authRoutes = require('./routes/auth');
@@ -12,14 +16,38 @@ const userRoutes = require('./routes/users');
 // Environment variables
 dotenv.config();
 
+// Admin kullanıcısı oluşturma fonksiyonu
+const createAdminUser = async () => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@yeditepe.edu.tr';
+    const existingAdmin = await User.findOne({ email: adminEmail });
+    
+    if (!existingAdmin) {
+      const salt = await bcrypt.genSalt(12);
+      const hashedPassword = await bcrypt.hash('admin123', salt);
+      
+      const adminUser = new User({
+        name: 'Admin',
+        email: adminEmail,
+        password: hashedPassword,
+        role: 'admin',
+        isApproved: true
+      });
+      
+      await adminUser.save();
+      console.log('Admin kullanıcısı oluşturuldu');
+    }
+  } catch (err) {
+    console.error('Admin kullanıcısı oluşturulurken hata:', err);
+  }
+};
+
 // Express app
 const app = express();
 
-// CORS ayarları
+// CORS ayarları - daha esnek
 app.use(cors({
-  origin: ['http://34.28.93.220:3000', 'http://localhost:3000'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  origin: true, // Tüm originlere izin ver
   credentials: true,
   exposedHeaders: ['x-new-token']
 }));
@@ -31,32 +59,20 @@ app.use(express.urlencoded({ extended: true }));
 // Request logger middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  if (req.method === 'POST' && req.url === '/api/auth/login') {
-    console.log('Login isteği:', req.body.email);
-  }
   next();
 });
 
 // MongoDB bağlantısı
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+    await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000
+      useUnifiedTopology: true
     });
-    
     console.log('MongoDB bağlantısı başarılı');
     
-    // Veritabanı bağlantısı başarılı olduktan sonra koleksiyonları kontrol et
-    const collections = await conn.connection.db.listCollections().toArray();
-    console.log('Mevcut koleksiyonlar:', collections.map(c => c.name));
-    
-    // users koleksiyonunu kontrol et
-    const users = await conn.connection.db.collection('users').find({}).toArray();
-    console.log('Mevcut kullanıcılar:', users.length);
+    // MongoDB bağlantısı başarılı olduktan sonra admin kullanıcısını oluştur
+    await createAdminUser();
     
   } catch (err) {
     console.error('MongoDB bağlantı hatası:', err);
@@ -68,18 +84,14 @@ connectDB();
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
+  res.status(200).json({ status: 'OK' });
 });
 
-// Route'ları kullan
-app.use('/api/auth', authRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/users', userRoutes);
+// Route'ları kullan - /api prefix'i olmadan
+app.use('/auth', authRoutes);
+app.use('/courses', courseRoutes);
+app.use('/chat', chatRoutes);
+app.use('/users', userRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -89,10 +101,7 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Hata:', err);
-  res.status(500).json({ 
-    message: 'Sunucu hatası', 
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error'
-  });
+  res.status(500).json({ message: 'Sunucu hatası' });
 });
 
 // Server'ı başlat
