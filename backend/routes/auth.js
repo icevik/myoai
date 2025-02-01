@@ -125,9 +125,13 @@ const registerValidation = [
 // Giriş
 router.post('/login', loginValidation, async (req, res) => {
   try {
+    // Debug için gelen isteği logla
+    console.log('Login isteği:', req.body);
+
     // Validasyon kontrolü
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validasyon hataları:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
@@ -135,6 +139,15 @@ router.post('/login', loginValidation, async (req, res) => {
     
     // Kullanıcıyı bul
     const user = await User.findOne({ email });
+    console.log('Bulunan kullanıcı:', user ? {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      isApproved: user.isApproved,
+      loginAttempts: user.loginAttempts,
+      lockUntil: user.lockUntil
+    } : null);
+
     if (!user) {
       return res.status(401).json({ message: 'Email veya şifre hatalı' });
     }
@@ -142,6 +155,7 @@ router.post('/login', loginValidation, async (req, res) => {
     // Hesap kilitli mi kontrol et
     if (user.isLocked()) {
       const lockTime = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
+      console.log('Hesap kilitli:', { lockTime });
       return res.status(401).json({ 
         message: `Hesabınız kilitlendi. ${lockTime} dakika sonra tekrar deneyin.` 
       });
@@ -149,13 +163,21 @@ router.post('/login', loginValidation, async (req, res) => {
 
     // Hesap onaylı mı kontrol et
     if (!user.isApproved) {
+      console.log('Hesap onaylı değil');
       return res.status(401).json({ message: 'Hesabınız henüz onaylanmamış' });
     }
 
     // Şifre kontrolü
+    console.log('Şifre kontrolü yapılıyor...');
     const isMatch = await user.comparePassword(password);
+    console.log('Şifre eşleşmesi:', isMatch);
+
     if (!isMatch) {
       await user.incrementLoginAttempts();
+      console.log('Başarısız giriş denemesi:', {
+        loginAttempts: user.loginAttempts,
+        lockUntil: user.lockUntil
+      });
       
       if (user.isLocked()) {
         return res.status(401).json({ 
@@ -168,6 +190,7 @@ router.post('/login', loginValidation, async (req, res) => {
 
     // Başarılı giriş
     await user.successfulLogin();
+    console.log('Başarılı giriş');
     
     // Token oluştur
     const token = generateToken(user);

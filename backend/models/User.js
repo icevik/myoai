@@ -85,8 +85,14 @@ userSchema.pre('save', async function(next) {
 // Şifre karşılaştırma metodu
 userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
-    return await bcrypt.compare(candidatePassword, this.password);
+    console.log('Şifre karşılaştırılıyor:');
+    console.log('- Hash\'lenmiş şifre:', this.password);
+    console.log('- Gelen şifre:', candidatePassword);
+    const isMatch = await bcrypt.compare(candidatePassword, this.password);
+    console.log('- Eşleşme sonucu:', isMatch);
+    return isMatch;
   } catch (error) {
+    console.error('Şifre karşılaştırma hatası:', error);
     throw new Error('Şifre karşılaştırma hatası');
   }
 };
