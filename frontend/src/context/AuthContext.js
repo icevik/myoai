@@ -2,17 +2,17 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 
 // API URL'ini sunucu IP'sine göre ayarla
-const API_URL = process.env.REACT_APP_API_URL || 'http://34.136.154.58:5000';
+const API_URL = '/api';
 
 // Axios instance oluştur
 const axiosInstance = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  withCredentials: true // CORS için önemli
+  withCredentials: true
 });
 
 // Request interceptor
@@ -22,9 +22,16 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('Request Config:', {
+      url: config.url,
+      method: config.method,
+      headers: config.headers,
+      data: config.data
+    });
     return config;
   },
   (error) => {
+    console.error('Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -32,6 +39,11 @@ axiosInstance.interceptors.request.use(
 // Response interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
+    console.log('Response:', {
+      status: response.status,
+      headers: response.headers,
+      data: response.data
+    });
     const newToken = response.headers['x-new-token'];
     if (newToken) {
       localStorage.setItem('token', newToken);
@@ -39,6 +51,11 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   (error) => {
+    console.error('Response Error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
     if (error.code === 'ECONNABORTED') {
       return Promise.reject(new Error('Sunucuya bağlanılamadı. Lütfen daha sonra tekrar deneyin.'));
     }
@@ -80,9 +97,11 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axiosInstance.get('/auth/profile');
       setUser(res.data);
+      localStorage.setItem('user', JSON.stringify(res.data));
     } catch (error) {
       console.error('Profil yüklenirken hata:', error);
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     } finally {
       setLoading(false);
     }
@@ -90,18 +109,21 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      console.log('Login isteği:', { email, password });
       const res = await axiosInstance.post('/auth/login', {
         email,
         password
       });
 
+      console.log('Login cevabı:', res.data);
       const { token, user } = res.data;
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
       return true;
     } catch (error) {
-      console.error('Login hatası:', error);
-      throw error;
+      console.error('Login hatası:', error.response?.data || error.message);
+      throw error.response?.data?.message || error.message;
     }
   };
 
@@ -121,6 +143,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
   };
 

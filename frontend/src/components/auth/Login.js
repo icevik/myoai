@@ -50,14 +50,20 @@ const Login = () => {
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const value = e.target.name === 'email' ? e.target.value.toLowerCase() : e.target.value;
+    setFormData({ ...formData, [e.target.name]: value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       await login(formData.email, formData.password);
-      history.push('/dashboard');
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (user && user.role === 'admin') {
+        history.push('/admin');
+      } else {
+        history.push('/dashboard');
+      }
     } catch (error) {
       setError(error.toString());
     }

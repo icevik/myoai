@@ -17,9 +17,11 @@ const app = express();
 
 // CORS ayarları
 app.use(cors({
-  origin: '*',
+  origin: process.env.CORS_ORIGIN || 'http://34.136.154.58:3000',
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['x-new-token']
 }));
 
 // Body parser
@@ -30,25 +32,22 @@ app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
+  if (req.method !== 'OPTIONS') {
+    console.log('Body:', req.body);
+  }
   next();
 });
 
 // MongoDB bağlantısı
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://admin:password123@mongo:27017/chatbot?authSource=admin', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    console.log('MongoDB bağlantısı başarılı');
-  } catch (err) {
-    console.error('MongoDB bağlantı hatası:', err);
-    process.exit(1);
-  }
-};
-
-connectDB();
+mongoose.connect(process.env.MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  connectTimeoutMS: 10000,
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('MongoDB bağlantısı başarılı'))
+.catch(err => console.error('MongoDB bağlantı hatası:', err));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -75,6 +74,6 @@ app.use((err, req, res, next) => {
 
 // Server'ı başlat
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`Server ${PORT} portunda çalışıyor`);
 }); 

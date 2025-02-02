@@ -24,35 +24,6 @@ const generateToken = (user) => {
   );
 };
 
-// Admin kullanıcısı oluşturma fonksiyonu
-const createAdminUser = async () => {
-  try {
-    const adminEmail = 'admin@yeditepe.edu.tr';
-    const existingAdmin = await User.findOne({ email: adminEmail });
-    
-    if (!existingAdmin) {
-      const salt = await bcrypt.genSalt(12);
-      const hashedPassword = await bcrypt.hash('admin123', salt);
-      
-      const adminUser = new User({
-        name: 'Admin',
-        email: adminEmail,
-        password: hashedPassword,
-        role: 'admin',
-        isApproved: true
-      });
-      
-      await adminUser.save();
-      console.log('Admin kullanıcısı oluşturuldu');
-    }
-  } catch (err) {
-    console.error('Admin kullanıcısı oluşturulurken hata:', err);
-  }
-};
-
-// Uygulama başladığında admin kullanıcısını oluştur
-createAdminUser();
-
 // Token kontrol ve yenileme middleware
 const authMiddleware = async (req, res, next) => {
   try {
@@ -127,19 +98,24 @@ router.post('/login', loginValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ message: errors.array()[0].msg });
     }
 
     const { email, password } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    console.log('Login isteği:', { email: normalizedEmail });
     
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
+      console.log('Kullanıcı bulunamadı:', normalizedEmail);
       return res.status(401).json({ message: 'Email veya şifre hatalı' });
     }
 
     // Hesap kilitli mi kontrol et
     if (user.isLocked()) {
       const lockTime = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
+      console.log('Hesap kilitli:', normalizedEmail, lockTime);
       return res.status(401).json({ 
         message: `Hesabınız kilitlendi. ${lockTime} dakika sonra tekrar deneyin.` 
       });
@@ -147,13 +123,15 @@ router.post('/login', loginValidation, async (req, res) => {
 
     // Hesap onaylı mı kontrol et
     if (!user.isApproved && user.role !== 'admin') {
+      console.log('Hesap onaylanmamış:', normalizedEmail);
       return res.status(401).json({ message: 'Hesabınız henüz onaylanmamış' });
     }
 
     // Şifre kontrolü
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       await user.incrementLoginAttempts();
+      console.log('Şifre hatalı:', normalizedEmail);
       
       if (user.isLocked()) {
         return res.status(401).json({ 
@@ -166,6 +144,7 @@ router.post('/login', loginValidation, async (req, res) => {
 
     // Başarılı giriş
     await user.successfulLogin();
+    console.log('Başarılı giriş:', normalizedEmail);
     
     // Token oluştur
     const token = generateToken(user);
@@ -192,28 +171,32 @@ router.post('/register-admin', registerValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ message: errors.array()[0].msg });
     }
 
     const { name, email, password } = req.body;
+    const normalizedEmail = email.toLowerCase();
 
     // E-posta kontrolü
-    if (!email.endsWith('@yeditepe.edu.tr') || email.includes('std.')) {
+    if (!normalizedEmail.endsWith('@yeditepe.edu.tr') || normalizedEmail.includes('std.')) {
       return res.status(400).json({ message: 'Geçersiz admin e-posta adresi' });
     }
 
-    const existingUser = await User.findOne({ email });
+    // Admin sayısını kontrol et
+    const adminCount = await User.countDocuments({ role: 'admin' });
+    if (adminCount > 0) {
+      return res.status(403).json({ message: 'Sistemde zaten bir admin bulunmakta' });
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ message: 'Bu e-posta adresi zaten kullanımda' });
     }
 
-    const salt = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
     const user = new User({
       name,
-      email,
-      password: hashedPassword,
+      email: normalizedEmail,
+      password,
       role: 'admin',
       isApproved: true
     });
@@ -241,28 +224,26 @@ router.post('/register-request', registerValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ message: errors.array()[0].msg });
     }
 
     const { name, email, password } = req.body;
+    const normalizedEmail = email.toLowerCase();
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ message: 'Bu e-posta adresi zaten kullanımda' });
     }
 
     // Öğrenci e-posta kontrolü
-    if (!email.includes('@std.yeditepe.edu.tr')) {
+    if (!normalizedEmail.includes('@std.yeditepe.edu.tr')) {
       return res.status(400).json({ message: 'Geçerli bir öğrenci e-posta adresi giriniz' });
     }
 
-    const salt = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
     const user = new User({
       name,
-      email,
-      password: hashedPassword,
+      email: normalizedEmail,
+      password,
       role: 'student',
       isApproved: false
     });
