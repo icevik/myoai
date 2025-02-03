@@ -46,6 +46,14 @@ const courseSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isPublic: {
+    type: Boolean,
+    default: true
+  },
+  allowedUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -64,6 +72,14 @@ courseSchema.methods.isApiConfigComplete = function() {
          this.apiConfig.host &&
          this.apiConfig.chatbotId &&
          this.apiConfig.securityKey;
+};
+
+// Kullanıcının kursa erişim izni var mı kontrol et
+courseSchema.methods.hasAccess = function(userId) {
+  return this.isActive && (
+    this.isPublic || 
+    this.allowedUsers.includes(userId)
+  );
 };
 
 module.exports = mongoose.model('Course', courseSchema); 

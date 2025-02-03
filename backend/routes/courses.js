@@ -8,9 +8,20 @@ const fetch = require('node-fetch');
 // Tüm dersleri getir
 router.get('/', protect, async (req, res) => {
   try {
-    const courses = await Course.find()
+    let query = { isActive: true };
+    
+    // Admin tüm dersleri görebilir
+    if (req.user.role !== 'admin') {
+      query.$or = [
+        { isPublic: true },
+        { allowedUsers: req.user._id }
+      ];
+    }
+
+    const courses = await Course.find(query)
       .populate('category', 'code name')
       .sort('code');
+    
     res.json(courses);
   } catch (error) {
     console.error('Dersler yüklenirken hata:', error);
@@ -48,7 +59,7 @@ router.post('/test-api', protect, async (req, res) => {
 // Ders ekle (Admin only)
 router.post('/', protect, admin, async (req, res) => {
   try {
-    const { code, name, category, apiConfig } = req.body;
+    const { code, name, category, apiConfig, isPublic, allowedUsers } = req.body;
 
     // API bağlantısını test et
     try {
@@ -81,7 +92,9 @@ router.post('/', protect, admin, async (req, res) => {
       code,
       name,
       category,
-      apiConfig
+      apiConfig,
+      isPublic: isPublic !== undefined ? isPublic : true,
+      allowedUsers: allowedUsers || []
     });
 
     await course.save();
@@ -98,7 +111,7 @@ router.post('/', protect, admin, async (req, res) => {
 // Ders güncelle (Admin only)
 router.put('/:code', protect, admin, async (req, res) => {
   try {
-    const { category } = req.body;
+    const { category, isPublic, allowedUsers } = req.body;
     if (category) {
       const categoryExists = await Category.findById(category);
       if (!categoryExists) {
@@ -108,7 +121,11 @@ router.put('/:code', protect, admin, async (req, res) => {
 
     const course = await Course.findOneAndUpdate(
       { code: req.params.code },
-      req.body,
+      {
+        ...req.body,
+        isPublic: isPublic !== undefined ? isPublic : true,
+        allowedUsers: allowedUsers || []
+      },
       { new: true, runValidators: true }
     ).populate('category', 'code name');
 
@@ -142,12 +159,68 @@ router.delete('/:code', protect, admin, async (req, res) => {
 // Kategoriye göre dersleri getir
 router.get('/category/:categoryId', protect, async (req, res) => {
   try {
-    const courses = await Course.find({ category: req.params.categoryId })
+    let query = { 
+      category: req.params.categoryId,
+      isActive: true
+    };
+    
+    // Admin tüm dersleri görebilir
+    if (req.user.role !== 'admin') {
+      query.$or = [
+        { isPublic: true },
+        { allowedUsers: req.user._id }
+      ];
+    }
+
+    const courses = await Course.find(query)
       .populate('category', 'code name')
       .sort('code');
+    
     res.json(courses);
   } catch (error) {
     console.error('Dersler yüklenirken hata:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+});
+
+// Kullanıcıya ders ata
+router.post('/:code/assign', protect, admin, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    const course = await Course.findOne({ code: req.params.code });
+    if (!course) {
+      return res.status(404).json({ message: 'Ders bulunamadı' });
+    }
+
+    if (!course.allowedUsers.includes(userId)) {
+      course.allowedUsers.push(userId);
+      await course.save();
+    }
+
+    res.json({ message: 'Kullanıcı derse atandı' });
+  } catch (error) {
+    console.error('Kullanıcı derse atanırken hata:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+});
+
+// Kullanıcının ders atamalarını kaldır
+router.delete('/:code/assign', protect, admin, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    const course = await Course.findOne({ code: req.params.code });
+    if (!course) {
+      return res.status(404).json({ message: 'Ders bulunamadı' });
+    }
+
+    course.allowedUsers = course.allowedUsers.filter(id => id.toString() !== userId);
+    await course.save();
+
+    res.json({ message: 'Kullanıcının ders ataması kaldırıldı' });
+  } catch (error) {
+    console.error('Kullanıcının ders ataması kaldırılırken hata:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });

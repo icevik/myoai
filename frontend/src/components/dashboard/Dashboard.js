@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Container,
   Grid,
@@ -32,7 +33,11 @@ import {
   Badge,
   Switch,
   FormControlLabel,
-  Alert
+  Alert,
+  Card,
+  CardContent,
+  CardActions,
+  Skeleton
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -50,7 +55,9 @@ import {
   LightMode as LightModeIcon,
   FilterList as FilterIcon,
   Delete as DeleteIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Category as CategoryIcon,
+  Chat as ChatIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
@@ -61,6 +68,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { useQuery, useQueryClient } from 'react-query';
 
 // Styled components
 const StyledContainer = styled(Container)(({ theme }) => ({
@@ -88,7 +96,7 @@ const MessageList = styled(Box)(({ theme }) => ({
   gap: theme.spacing(2)
 }));
 
-const MessageBubble = styled(Box)(({ theme, isUser }) => ({
+const MessageBubble = styled(motion.div)(({ theme, isUser }) => ({
   maxWidth: '70%',
   padding: theme.spacing(1.5, 2),
   borderRadius: theme.spacing(2),
@@ -102,6 +110,16 @@ const MessageBubble = styled(Box)(({ theme, isUser }) => ({
     borderRadius: theme.spacing(1),
     backgroundColor: theme.palette.background.paper,
     overflow: 'auto'
+  }
+}));
+
+const CourseCard = styled(motion.div)(({ theme }) => ({
+  height: '100%',
+  cursor: 'pointer',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    transform: 'translateY(-4px)',
+    boxShadow: '0 8px 16px rgba(0, 0, 0, 0.1)'
   }
 }));
 
@@ -122,11 +140,10 @@ const SearchBox = styled(TextField)(({ theme }) => ({
 }));
 
 const Dashboard = () => {
+  const queryClient = useQueryClient();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
-  const [courses, setCourses] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -134,17 +151,29 @@ const Dashboard = () => {
   const [drawerOpen, setDrawerOpen] = useState(!isMobile);
   const messageListRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [favorites, setFavorites] = useState([]);
-  const [notes, setNotes] = useState({});
-  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState([]);
-  const [selectedConversation, setSelectedConversation] = useState(null);
   const [error, setError] = useState('');
 
+  // React Query hooks
+  const { data: coursesData, isLoading: coursesLoading } = useQuery('courses', async () => {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`${API_URL}/courses`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  });
+
+  const { data: categoriesData, isLoading: categoriesLoading } = useQuery('categories', async () => {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`${API_URL}/categories`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  });
+
   useEffect(() => {
-    loadData();
     loadFavorites();
-    loadNotes();
   }, []);
 
   useEffect(() => {
@@ -153,26 +182,6 @@ const Dashboard = () => {
     }
   }, [messages]);
 
-  const loadData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const [coursesRes, categoriesRes] = await Promise.all([
-        axios.get(`${API_URL}/courses`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${API_URL}/categories`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
-      
-      setCourses(coursesRes.data);
-      setCategories(categoriesRes.data);
-    } catch (error) {
-      console.error('Veri yüklenirken hata:', error);
-      setError('Veriler yüklenirken bir hata oluştu');
-    }
-  };
-
   const loadFavorites = () => {
     const savedFavorites = localStorage.getItem('favorites');
     if (savedFavorites) {
@@ -180,19 +189,18 @@ const Dashboard = () => {
     }
   };
 
-  const loadNotes = () => {
-    const savedNotes = localStorage.getItem('notes');
-    if (savedNotes) {
-      setNotes(JSON.parse(savedNotes));
-    }
-  };
+  const filteredCourses = coursesData?.filter(course => {
+    const matchesSearch = course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         course.code.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || course.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   const handleCourseSelect = async (course) => {
     setSelectedCourse(course);
     setMessages([]);
     setError('');
     
-    // Karşılama mesajını ekle
     if (course.welcomeMessage) {
       setMessages([{
         role: 'assistant',
@@ -205,14 +213,13 @@ const Dashboard = () => {
       setDrawerOpen(false);
     }
 
-    // Konuşma geçmişini yükle
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(
         `${API_URL}/chat/conversations?courseId=${course._id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setConversationHistory(response.data.conversations);
+      // Konuşma geçmişini işle
     } catch (error) {
       console.error('Konuşma geçmişi yüklenirken hata:', error);
       setError('Konuşma geçmişi yüklenirken bir hata oluştu');
@@ -255,276 +262,222 @@ const Dashboard = () => {
     localStorage.setItem('favorites', JSON.stringify(newFavorites));
   };
 
-  const handleAddNote = (courseId, note) => {
-    const newNotes = {
-      ...notes,
-      [courseId]: [...(notes[courseId] || []), note]
-    };
-    setNotes(newNotes);
-    localStorage.setItem('notes', JSON.stringify(newNotes));
-  };
+  const renderCourseGrid = () => {
+    if (coursesLoading) {
+      return Array(6).fill(0).map((_, index) => (
+        <Grid item xs={12} sm={6} md={4} key={`skeleton-${index}`}>
+          <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
+        </Grid>
+      ));
+    }
 
-  const toggleDrawer = () => {
-    setDrawerOpen(!drawerOpen);
-  };
-
-  const filteredCategories = categories.filter(category =>
-    category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    courses.some(course =>
-      course.category === category._id &&
-      (course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       course.code.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-  );
-
-  const renderMessage = (message) => {
-    return (
-      <ReactMarkdown
-        components={{
-          code: ({ node, inline, className, children, ...props }) => {
-            const match = /language-(\w+)/.exec(className || '');
-            return !inline && match ? (
-              <SyntaxHighlighter
-                style={tomorrow}
-                language={match[1]}
-                PreTag="div"
-                {...props}
+    return filteredCourses?.map(course => (
+      <Grid item xs={12} sm={6} md={4} key={course._id}>
+        <CourseCard
+          as={Card}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          onClick={() => handleCourseSelect(course)}
+        >
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                {course.name}
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavorite(course._id);
+                }}
               >
-                {String(children).replace(/\n$/, '')}
-              </SyntaxHighlighter>
-            ) : (
-              <code className={className} {...props}>
-                {children}
-              </code>
-            );
-          }
-        }}
-      >
-        {message.content}
-      </ReactMarkdown>
-    );
+                {favorites.includes(course._id) ? (
+                  <StarIcon color="warning" />
+                ) : (
+                  <StarBorderIcon />
+                )}
+              </IconButton>
+            </Box>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {course.code}
+            </Typography>
+            <Chip
+              icon={<CategoryIcon />}
+              label={categoriesData?.find(cat => cat._id === course.category)?.name || 'Kategori'}
+              size="small"
+              sx={{ mt: 1 }}
+            />
+          </CardContent>
+          <CardActions>
+            <Button
+              size="small"
+              startIcon={<ChatIcon />}
+              onClick={() => handleCourseSelect(course)}
+            >
+              Sohbete Başla
+            </Button>
+          </CardActions>
+        </CourseCard>
+      </Grid>
+    ));
   };
 
   return (
     <StyledContainer maxWidth="xl">
-      {/* Mobil menü butonu */}
-      {isMobile && (
-        <Box sx={{ position: 'fixed', left: 16, top: 80, zIndex: 1200 }}>
-          <Fab color="primary" size="small" onClick={toggleDrawer}>
-            {drawerOpen ? <CloseIcon /> : <MenuIcon />}
-          </Fab>
-        </Box>
-      )}
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Ders ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                )
+              }}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={selectedCategory === 'favorites'}
+                  onChange={(e) => setSelectedCategory(e.target.checked ? 'favorites' : 'all')}
+                />
+              }
+              label="Favoriler"
+            />
+          </Box>
+        </Grid>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+            <Chip
+              label="Tümü"
+              onClick={() => setSelectedCategory('all')}
+              color={selectedCategory === 'all' ? 'primary' : 'default'}
+              variant={selectedCategory === 'all' ? 'filled' : 'outlined'}
+            />
+            {categoriesData?.map(category => (
+              <Chip
+                key={category._id}
+                label={category.name}
+                onClick={() => setSelectedCategory(category._id)}
+                color={selectedCategory === category._id ? 'primary' : 'default'}
+                variant={selectedCategory === category._id ? 'filled' : 'outlined'}
+              />
+            ))}
+          </Box>
+        </Grid>
 
-      {/* Dersler Drawer */}
-      <CourseDrawer
-        variant={isMobile ? 'temporary' : 'persistent'}
-        anchor="left"
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        {error && (
+          <Grid item xs={12}>
+            <Alert severity="error" onClose={() => setError('')}>
+              {error}
+            </Alert>
+          </Grid>
+        )}
+
+        <AnimatePresence>
+          {renderCourseGrid()}
+        </AnimatePresence>
+      </Grid>
+
+      <Dialog
+        open={!!selectedCourse}
+        fullScreen={isMobile}
+        maxWidth="md"
+        fullWidth
+        onClose={() => setSelectedCourse(null)}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Derslerim
-          </Typography>
-          <Tooltip title="Konuşma Geçmişi">
-            <IconButton onClick={() => setHistoryDialogOpen(true)}>
-              <HistoryIcon />
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6">
+              {selectedCourse?.name} ({selectedCourse?.code})
+            </Typography>
+            <IconButton onClick={() => setSelectedCourse(null)}>
+              <CloseIcon />
             </IconButton>
-          </Tooltip>
-        </Box>
-
-        <SearchBox
-          fullWidth
-          variant="outlined"
-          placeholder="Ders veya kategori ara..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            )
-          }}
-        />
-
-        {filteredCategories.map((category) => (
-          <Accordion key={category._id} defaultExpanded>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="subtitle1">
-                {category.name}
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <List disablePadding>
-                {courses
-                  .filter(course => course.category === category._id)
-                  .map((course) => (
-                    <ListItem
-                      key={course._id}
-                      button
-                      selected={selectedCourse?._id === course._id}
-                      onClick={() => handleCourseSelect(course)}
-                      secondaryAction={
-                        <IconButton
-                          edge="end"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(course._id);
-                          }}
-                        >
-                          {favorites.includes(course._id) ? (
-                            <StarIcon color="warning" />
-                          ) : (
-                            <StarBorderIcon />
-                          )}
-                        </IconButton>
-                      }
-                    >
-                      <ListItemText
-                        primary={course.name}
-                        secondary={course.code}
-                      />
-                    </ListItem>
-                  ))}
-              </List>
-            </AccordionDetails>
-          </Accordion>
-        ))}
-      </CourseDrawer>
-
-      {/* Chat alanı */}
-      <Grid item xs={12} sx={{ pl: drawerOpen && !isMobile ? '320px' : 0 }}>
-        <ChatContainer>
-          {selectedCourse ? (
-            <>
-              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="h6">
-                  {selectedCourse.name} ({selectedCourse.code})
-                </Typography>
-              </Box>
-
-              <MessageList ref={messageListRef}>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <ChatContainer>
+            <MessageList ref={messageListRef}>
+              <AnimatePresence>
                 {messages.map((message, index) => (
                   <MessageBubble
                     key={index}
                     isUser={message.role === 'user'}
+                    initial={{ opacity: 0, scale: 0.8, x: message.role === 'user' ? 20 : -20 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    {renderMessage(message)}
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                      {format(new Date(message.timestamp), 'PPpp', { locale: tr })}
+                    <ReactMarkdown
+                      components={{
+                        code: ({ node, inline, className, children, ...props }) => {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              style={tomorrow}
+                              language={match[1]}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          );
+                        }
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                    <Typography variant="caption" sx={{ mt: 1, opacity: 0.7 }}>
+                      {format(new Date(message.timestamp), 'HH:mm', { locale: tr })}
                     </Typography>
                   </MessageBubble>
                 ))}
-                {loading && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                    <CircularProgress size={24} />
-                  </Box>
-                )}
-              </MessageList>
-
-              <InputContainer>
-                <form onSubmit={handleSendMessage}>
-                  <Grid container spacing={1}>
-                    <Grid item xs>
-                      <TextField
-                        fullWidth
-                        variant="outlined"
-                        placeholder="Mesajınızı yazın..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        disabled={loading}
-                        multiline
-                        maxRows={4}
-                      />
-                    </Grid>
-                    <Grid item>
-                      <IconButton
-                        color="primary"
-                        type="submit"
-                        disabled={!newMessage.trim() || loading}
-                      >
-                        <SendIcon />
-                      </IconButton>
-                    </Grid>
+              </AnimatePresence>
+              {loading && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              )}
+            </MessageList>
+            <InputContainer>
+              <form onSubmit={handleSendMessage}>
+                <Grid container spacing={1}>
+                  <Grid item xs>
+                    <TextField
+                      fullWidth
+                      variant="outlined"
+                      placeholder="Mesajınızı yazın..."
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      disabled={loading}
+                    />
                   </Grid>
-                </form>
-              </InputContainer>
-            </>
-          ) : (
-            <Box
-              sx={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'column',
-                gap: 2
-              }}
-            >
-              <SchoolIcon sx={{ fontSize: 64, color: 'text.secondary' }} />
-              <Typography variant="h6" color="text.secondary">
-                Sohbet başlatmak için bir ders seçin
-              </Typography>
-            </Box>
-          )}
-        </ChatContainer>
-      </Grid>
-
-      {/* Konuşma Geçmişi Dialog */}
-      <Dialog
-        open={historyDialogOpen}
-        onClose={() => setHistoryDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          Konuşma Geçmişi
-          <IconButton
-            onClick={() => setHistoryDialogOpen(false)}
-            sx={{ position: 'absolute', right: 8, top: 8 }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <List>
-            {conversationHistory.map((conversation) => (
-              <ListItem
-                key={conversation._id}
-                button
-                onClick={() => {
-                  setSelectedConversation(conversation);
-                  setMessages(conversation.messages);
-                  setHistoryDialogOpen(false);
-                }}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="subtitle1">
-                        {conversation.course.name}
-                      </Typography>
-                      <Chip
-                        label={conversation.course.code}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                      />
-                    </Box>
-                  }
-                  secondary={format(new Date(conversation.updatedAt), 'PPpp', { locale: tr })}
-                />
-              </ListItem>
-            ))}
-          </List>
+                  <Grid item>
+                    <IconButton
+                      color="primary"
+                      type="submit"
+                      disabled={loading || !newMessage.trim()}
+                    >
+                      <SendIcon />
+                    </IconButton>
+                  </Grid>
+                </Grid>
+              </form>
+            </InputContainer>
+          </ChatContainer>
         </DialogContent>
       </Dialog>
     </StyledContainer>

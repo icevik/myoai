@@ -31,7 +31,9 @@ import {
   Box,
   Alert,
   Chip,
-  useTheme
+  useTheme,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -65,6 +67,8 @@ const AdminDashboard = () => {
     name: '',
     category: '',
     welcomeMessage: '',
+    isPublic: true,
+    allowedUsers: [],
     apiConfig: {
       host: '',
       chatbotId: '',
@@ -162,6 +166,8 @@ const AdminDashboard = () => {
       name: course.name,
       category: course.category?._id || course.category,
       welcomeMessage: course.welcomeMessage || '',
+      isPublic: course.isPublic,
+      allowedUsers: course.allowedUsers || [],
       apiConfig: {
         host: course.apiConfig?.host || '',
         chatbotId: course.apiConfig?.chatbotId || '',
@@ -190,6 +196,8 @@ const AdminDashboard = () => {
         name: '',
         category: '',
         welcomeMessage: '',
+        isPublic: true,
+        allowedUsers: [],
         apiConfig: {
           host: '',
           chatbotId: '',
@@ -618,6 +626,8 @@ const AdminDashboard = () => {
             name: '',
             category: '',
             welcomeMessage: '',
+            isPublic: true,
+            allowedUsers: [],
             apiConfig: {
               host: '',
               chatbotId: '',
@@ -678,6 +688,49 @@ const AdminDashboard = () => {
               />
             </Grid>
             <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={courseForm.isPublic}
+                    onChange={(e) => setCourseForm({ ...courseForm, isPublic: e.target.checked })}
+                  />
+                }
+                label="Herkese Açık"
+              />
+            </Grid>
+            {!courseForm.isPublic && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>İzin Verilen Kullanıcılar</InputLabel>
+                  <Select
+                    multiple
+                    value={courseForm.allowedUsers}
+                    onChange={(e) => setCourseForm({ ...courseForm, allowedUsers: e.target.value })}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((userId) => {
+                          const user = users.find(u => u._id === userId);
+                          return (
+                            <Chip
+                              key={userId}
+                              label={user ? user.name : userId}
+                              size="small"
+                            />
+                          );
+                        })}
+                      </Box>
+                    )}
+                  >
+                    {users.map((user) => (
+                      <MenuItem key={user._id} value={user._id}>
+                        {user.name} ({user.email})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+            <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
                 API Yapılandırması
               </Typography>
@@ -729,6 +782,8 @@ const AdminDashboard = () => {
                 name: '',
                 category: '',
                 welcomeMessage: '',
+                isPublic: true,
+                allowedUsers: [],
                 apiConfig: {
                   host: '',
                   chatbotId: '',
