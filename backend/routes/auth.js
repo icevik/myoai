@@ -314,18 +314,19 @@ router.post('/register-request', registerValidation, async (req, res) => {
 });
 
 // Profil bilgilerini getir
-router.get('/profile', authMiddleware, async (req, res) => {
+router.get('/profile', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId)
+    const user = await User.findById(req.user._id)
       .select('-password -loginAttempts -lockUntil')
       .populate('courses', 'code name');
-      
+    
     if (!user) {
       return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
     }
+    
     res.json(user);
   } catch (err) {
-    console.error('Profile error:', err);
+    console.error('Profil hatası:', err);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 });

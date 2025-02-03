@@ -3,6 +3,7 @@ const router = express.Router();
 const Course = require('../models/Course');
 const Category = require('../models/Category');
 const { protect, admin } = require('../middleware/auth');
+const fetch = require('node-fetch');
 
 // Tüm dersleri getir
 router.get('/', protect, async (req, res) => {
@@ -17,10 +18,58 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
+// API bağlantısını test et
+router.post('/test-api', protect, async (req, res) => {
+  try {
+    const { host, chatbotId, securityKey } = req.body;
+    
+    // Test isteği gönder
+    const response = await fetch(`${host}/api/v1/prediction/${chatbotId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${securityKey}`
+      },
+      body: JSON.stringify({ question: 'Test message' })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API yanıt vermedi: ${response.status}`);
+    }
+
+    const data = await response.json();
+    res.json({ message: 'API bağlantısı başarılı', data });
+  } catch (error) {
+    console.error('API test edilirken hata:', error);
+    res.status(400).json({ message: 'API bağlantısı başarısız: ' + error.message });
+  }
+});
+
 // Ders ekle (Admin only)
 router.post('/', protect, admin, async (req, res) => {
   try {
     const { code, name, category, apiConfig } = req.body;
+
+    // API bağlantısını test et
+    try {
+      const response = await fetch(`${apiConfig.host}/api/v1/prediction/${apiConfig.chatbotId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiConfig.securityKey}`
+        },
+        body: JSON.stringify({ question: 'Test message' })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API yanıt vermedi: ${response.status}`);
+      }
+    } catch (error) {
+      return res.status(400).json({ 
+        message: 'API yapılandırması geçersiz',
+        error: error.message 
+      });
+    }
 
     // Kategori kontrolü
     const categoryExists = await Category.findById(category);

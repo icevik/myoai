@@ -105,6 +105,15 @@ const AdminDashboard = () => {
     name: '',
     description: ''
   });
+  const [openUserDialog, setOpenUserDialog] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userForm, setUserForm] = useState({
+    name: '',
+    email: '',
+    role: '',
+    password: ''
+  });
+  const [selectedCourse, setSelectedCourse] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -174,13 +183,37 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleEditCourse = (course) => {
+    setSelectedCourse(course);
+    setCourseForm({
+      code: course.code,
+      name: course.name,
+      category: course.category?._id || course.category,
+      apiConfig: {
+        host: course.apiConfig?.host || '',
+        chatbotId: course.apiConfig?.chatbotId || '',
+        securityKey: course.apiConfig?.securityKey || ''
+      }
+    });
+    setOpenDialog(true);
+  };
+
   const handleAddCourse = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API_URL}/courses`, courseForm, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      if (selectedCourse) {
+        // Güncelleme işlemi
+        await axios.put(`${API_URL}/courses/${selectedCourse.code}`, courseForm, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        // Yeni ekleme işlemi
+        await axios.post(`${API_URL}/courses`, courseForm, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
       setOpenDialog(false);
+      setSelectedCourse(null);
       setCourseForm({
         code: '',
         name: '',
@@ -193,7 +226,7 @@ const AdminDashboard = () => {
       });
       loadData();
     } catch (error) {
-      console.error('Ders eklenirken hata:', error);
+      console.error('Ders işlemi sırasında hata:', error);
     }
   };
 
@@ -270,6 +303,69 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleEditUser = (user) => {
+    setSelectedUser(user);
+    setUserForm({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      password: ''
+    });
+    setOpenUserDialog(true);
+  };
+
+  const handleUpdateUser = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const updateData = { ...userForm };
+      
+      if (!updateData.password) {
+        delete updateData.password;
+      }
+
+      await axios.put(
+        `${API_URL}/users/${selectedUser._id}`,
+        updateData,
+        { headers }
+      );
+
+      if (userForm.role !== selectedUser.role) {
+        await axios.put(
+          `${API_URL}/users/${selectedUser._id}/role`,
+          { role: userForm.role },
+          { headers }
+        );
+      }
+
+      setOpenUserDialog(false);
+      setSelectedUser(null);
+      setUserForm({
+        name: '',
+        email: '',
+        role: '',
+        password: ''
+      });
+      loadData();
+    } catch (error) {
+      console.error('Kullanıcı güncellenirken hata:', error);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (window.confirm('Bu kullanıcıyı silmek istediğinizden emin misiniz?')) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`${API_URL}/users/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        loadData();
+      } catch (error) {
+        console.error('Kullanıcı silinirken hata:', error);
+      }
+    }
+  };
+
   return (
     <Root>
       <StyledAppBar position="static">
@@ -307,7 +403,7 @@ const AdminDashboard = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Ad Soyad</TableCell>
+                    <TableCell>Ad</TableCell>
                     <TableCell>E-posta</TableCell>
                     <TableCell>Rol</TableCell>
                     <TableCell>Durum</TableCell>
@@ -316,29 +412,37 @@ const AdminDashboard = () => {
                 </TableHead>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user._id}>
+                    <TableRow key={String(user._id)}>
                       <TableCell>{user.name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.role}</TableCell>
                       <TableCell>
-                        {user.isApproved ? 'Onaylı' : 'Beklemede'}
+                        {user.isApproved ? 'Onaylı' : 'Onay Bekliyor'}
                       </TableCell>
                       <TableCell>
-                        {!user.isApproved ? (
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleEditUser(user)}
+                          size="small"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        {!user.isApproved && (
                           <IconButton
-                            color="primary"
+                            color="success"
                             onClick={() => handleApproveUser(user._id)}
+                            size="small"
                           >
                             <CheckIcon />
                           </IconButton>
-                        ) : (
-                          <IconButton
-                            color="error"
-                            onClick={() => handleBanUser(user._id)}
-                          >
-                            <BlockIcon />
-                          </IconButton>
                         )}
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDeleteUser(user._id)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -418,14 +522,26 @@ const AdminDashboard = () => {
                 </TableHead>
                 <TableBody>
                   {courses.map((course) => (
-                    <TableRow key={course.code}>
+                    <TableRow key={String(course._id)}>
                       <TableCell>{course.code}</TableCell>
                       <TableCell>{course.name}</TableCell>
-                      <TableCell>{course.category}</TableCell>
                       <TableCell>
+                        {course.category && typeof course.category === 'object'
+                          ? course.category.name || course.category.code || 'N/A'
+                          : course.category || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleEditCourse(course)}
+                          size="small"
+                        >
+                          <EditIcon />
+                        </IconButton>
                         <IconButton
                           color="error"
                           onClick={() => handleDeleteCourse(course.code)}
+                          size="small"
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -489,9 +605,22 @@ const AdminDashboard = () => {
           </StyledPaper>
         )}
 
-        {/* Ders Ekleme Dialog */}
-        <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
-          <DialogTitle>Yeni Ders Ekle</DialogTitle>
+        {/* Ders Ekleme/Düzenleme Dialog */}
+        <Dialog open={openDialog} onClose={() => {
+          setOpenDialog(false);
+          setSelectedCourse(null);
+          setCourseForm({
+            code: '',
+            name: '',
+            category: '',
+            apiConfig: {
+              host: '',
+              chatbotId: '',
+              securityKey: ''
+            }
+          });
+        }}>
+          <DialogTitle>{selectedCourse ? 'Ders Düzenle' : 'Yeni Ders Ekle'}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2}>
               <Grid item xs={12}>
@@ -501,6 +630,7 @@ const AdminDashboard = () => {
                   value={courseForm.code}
                   onChange={(e) => setCourseForm({ ...courseForm, code: e.target.value })}
                   margin="normal"
+                  disabled={!!selectedCourse}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -566,9 +696,22 @@ const AdminDashboard = () => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>İptal</Button>
+            <Button onClick={() => {
+              setOpenDialog(false);
+              setSelectedCourse(null);
+              setCourseForm({
+                code: '',
+                name: '',
+                category: '',
+                apiConfig: {
+                  host: '',
+                  chatbotId: '',
+                  securityKey: ''
+                }
+              });
+            }}>İptal</Button>
             <Button onClick={handleAddCourse} color="primary">
-              Ekle
+              {selectedCourse ? 'Güncelle' : 'Ekle'}
             </Button>
           </DialogActions>
         </Dialog>
@@ -651,6 +794,55 @@ const AdminDashboard = () => {
             <Button onClick={() => setOpenCategoryDialog(false)}>İptal</Button>
             <Button onClick={handleAddCategory} color="primary">
               Ekle
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)}>
+          <DialogTitle>
+            {selectedUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}
+          </DialogTitle>
+          <DialogContent>
+            <TextField
+              margin="dense"
+              label="Ad"
+              type="text"
+              fullWidth
+              value={userForm.name}
+              onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+            />
+            <TextField
+              margin="dense"
+              label="E-posta"
+              type="email"
+              fullWidth
+              value={userForm.email}
+              onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+            />
+            <FormControl fullWidth margin="dense">
+              <InputLabel>Rol</InputLabel>
+              <Select
+                value={userForm.role}
+                onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+              >
+                <MenuItem value="user">Kullanıcı</MenuItem>
+                <MenuItem value="admin">Admin</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              margin="dense"
+              label="Şifre"
+              type="password"
+              fullWidth
+              value={userForm.password}
+              onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+              helperText={selectedUser ? 'Boş bırakırsanız şifre değişmez' : ''}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenUserDialog(false)}>İptal</Button>
+            <Button onClick={handleUpdateUser} color="primary">
+              Kaydet
             </Button>
           </DialogActions>
         </Dialog>

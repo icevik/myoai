@@ -63,7 +63,9 @@ const ServerMonitoring = () => {
     );
   }
 
-  const memoryUsagePercent = ((serverStatus.memory.used / serverStatus.memory.total) * 100).toFixed(1);
+  const memoryUsagePercent = serverStatus.memory && serverStatus.memory.total 
+    ? ((serverStatus.memory.used / serverStatus.memory.total) * 100).toFixed(1)
+    : 0;
   const uptimeInSeconds = serverStatus.system.uptime;
 
   return (
@@ -104,27 +106,27 @@ const ServerMonitoring = () => {
                 <Typography gutterBottom>RAM:</Typography>
                 <LinearProgress
                   variant="determinate"
-                  value={parseFloat(memoryUsagePercent)}
+                  value={parseFloat(memoryUsagePercent) || 0}
                   sx={{ height: 10, borderRadius: 5 }}
                 />
               </Box>
               <Typography>
-                Kullanılan: {(serverStatus.memory.used / 1024 / 1024 / 1024).toFixed(2)} GB
+                Kullanılan: {serverStatus.memory ? (serverStatus.memory.used / 1024 / 1024 / 1024).toFixed(2) : 0} GB
               </Typography>
               <Typography>
-                Toplam: {(serverStatus.memory.total / 1024 / 1024 / 1024).toFixed(2)} GB
+                Toplam: {serverStatus.memory ? (serverStatus.memory.total / 1024 / 1024 / 1024).toFixed(2) : 0} GB
               </Typography>
-              <Typography>Kullanım Oranı: {memoryUsagePercent}%</Typography>
+              <Typography>Kullanım Oranı: {memoryUsagePercent || 0}%</Typography>
 
               <Box mt={3}>
                 <Typography gutterBottom>SWAP:</Typography>
                 <LinearProgress
                   variant="determinate"
-                  value={(serverStatus.swap.used / serverStatus.swap.total) * 100}
+                  value={serverStatus.swap ? (serverStatus.swap.used / serverStatus.swap.total) * 100 : 0}
                   sx={{ height: 10, borderRadius: 5 }}
                 />
                 <Typography>
-                  Kullanılan: {serverStatus.swap.used} MB / {serverStatus.swap.total} MB
+                  Kullanılan: {serverStatus.swap ? `${serverStatus.swap.used} MB / ${serverStatus.swap.total} MB` : 'N/A'}
                 </Typography>
               </Box>
             </CardContent>
@@ -140,14 +142,14 @@ const ServerMonitoring = () => {
               <Box mb={2}>
                 <LinearProgress
                   variant="determinate"
-                  value={parseInt(serverStatus.disk.usagePercent)}
+                  value={serverStatus.disk ? parseInt(serverStatus.disk.usagePercent) : 0}
                   sx={{ height: 10, borderRadius: 5 }}
                 />
               </Box>
-              <Typography>Toplam: {serverStatus.disk.total}</Typography>
-              <Typography>Kullanılan: {serverStatus.disk.used}</Typography>
-              <Typography>Boş: {serverStatus.disk.free}</Typography>
-              <Typography>Kullanım: {serverStatus.disk.usagePercent}</Typography>
+              <Typography>Toplam: {serverStatus.disk ? serverStatus.disk.total : 'N/A'}</Typography>
+              <Typography>Kullanılan: {serverStatus.disk ? serverStatus.disk.used : 'N/A'}</Typography>
+              <Typography>Boş: {serverStatus.disk ? serverStatus.disk.free : 'N/A'}</Typography>
+              <Typography>Kullanım: {serverStatus.disk ? serverStatus.disk.usagePercent : '0%'}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -159,16 +161,16 @@ const ServerMonitoring = () => {
                 Docker Konteynerleri
               </Typography>
               <List>
-                {serverStatus.docker.containers.map((container, index) => (
-                  <React.Fragment key={container.name}>
+                {serverStatus.docker && serverStatus.docker.containers && serverStatus.docker.containers.map((container, index) => (
+                  <React.Fragment key={container.name || index}>
                     <ListItem>
                       <ListItemText
                         primary={container.name}
                         secondary={container.status}
                       />
                       <Chip
-                        label={container.status.includes('Up') ? 'Çalışıyor' : 'Durdu'}
-                        color={container.status.includes('Up') ? 'success' : 'error'}
+                        label={container.status && container.status.includes('Up') ? 'Çalışıyor' : 'Durdu'}
+                        color={container.status && container.status.includes('Up') ? 'success' : 'error'}
                         size="small"
                       />
                     </ListItem>
@@ -189,22 +191,28 @@ const ServerMonitoring = () => {
               <Grid container spacing={2}>
                 <Grid item xs={12} md={4}>
                   <Typography>
-                    Çalışma Süresi: {formatDistanceToNow(Date.now() - uptimeInSeconds * 1000, { locale: tr })}
+                    Çalışma Süresi: {serverStatus.system ? formatDistanceToNow(Date.now() - (serverStatus.system.uptime * 1000), { locale: tr }) : 'N/A'}
                   </Typography>
-                  <Typography>Platform: {serverStatus.system.platform}</Typography>
-                  <Typography>Sürüm: {serverStatus.system.release}</Typography>
+                  <Typography>Platform: {serverStatus.system?.platform || 'N/A'}</Typography>
+                  <Typography>Sürüm: {serverStatus.system?.release || 'N/A'}</Typography>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <Typography>Sunucu Adı: {serverStatus.system.hostname}</Typography>
-                  <Typography>Mimari: {serverStatus.system.arch}</Typography>
-                  <Typography>Sistem Tipi: {serverStatus.system.type}</Typography>
+                  <Typography>Sunucu Adı: {serverStatus.system?.hostname || 'N/A'}</Typography>
+                  <Typography>Mimari: {serverStatus.system?.arch || 'N/A'}</Typography>
+                  <Typography>Sistem Tipi: {serverStatus.system?.type || 'N/A'}</Typography>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <Typography>Process ID: {serverStatus.process.pid}</Typography>
+                  <Typography>Process ID: {serverStatus.process?.pid || 'N/A'}</Typography>
                   <Typography>
-                    Process Bellek: {(serverStatus.process.memory.heapUsed / 1024 / 1024).toFixed(2)} MB
+                    Process Bellek: {serverStatus.process?.memory?.heapUsed 
+                      ? (serverStatus.process.memory.heapUsed / (1024 * 1024)).toFixed(2)
+                      : 'N/A'} MB
                   </Typography>
-                  <Typography>Bağlantı Sayısı: {serverStatus.network.connections}</Typography>
+                  <Typography>
+                    Bağlantı Sayısı: {serverStatus.network?.connections 
+                      ? Object.keys(serverStatus.network.connections).length 
+                      : 'N/A'}
+                  </Typography>
                 </Grid>
               </Grid>
             </CardContent>

@@ -124,10 +124,12 @@ const Reports = () => {
                 <Typography variant="h6" gutterBottom>
                   Ders İstatistikleri
                 </Typography>
-                <Typography>Toplam Ders: {stats.courses.total}</Typography>
-                {stats.courses.byCategory.map((cat) => (
-                  <Typography key={cat._id}>
-                    {cat._id}: {cat.count} ders
+                <Typography>Toplam Ders: {stats?.courses?.total || 0}</Typography>
+                {stats?.courses?.byCategory && stats.courses.byCategory.map((cat) => (
+                  <Typography key={String(cat._id)}>
+                    {typeof cat._id === 'object'
+                      ? cat._id.name || cat._id.code || JSON.stringify(cat._id)
+                      : cat._id}: {cat.count} ders
                   </Typography>
                 ))}
               </CardContent>
@@ -161,13 +163,15 @@ const Reports = () => {
             </TableHead>
             <TableBody>
               {userActivity.map((user) => (
-                <TableRow key={user._id}>
+                <TableRow key={String(user._id)}>
                   <TableCell>{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell align="right">{user.messageCount}</TableCell>
                   <TableCell align="right">{user.courseCount}</TableCell>
                   <TableCell>
-                    {format(new Date(user.lastActivity), 'dd MMM yyyy HH:mm', { locale: tr })}
+                    {user.lastActivity 
+                      ? format(new Date(user.lastActivity), 'dd MMM yyyy HH:mm', { locale: tr })
+                      : 'N/A'}
                   </TableCell>
                 </TableRow>
               ))}
@@ -191,14 +195,22 @@ const Reports = () => {
             </TableHead>
             <TableBody>
               {courseUsage.map((course) => (
-                <TableRow key={course._id}>
+                <TableRow key={String(course._id)}>
                   <TableCell>{course._id}</TableCell>
                   <TableCell>{course.name}</TableCell>
-                  <TableCell>{course.category}</TableCell>
+                  <TableCell>
+                    {course.category 
+                      ? (typeof course.category === 'object' 
+                          ? course.category.name || course.category.code 
+                          : course.category)
+                      : 'N/A'}
+                  </TableCell>
                   <TableCell align="right">{course.userCount}</TableCell>
                   <TableCell align="right">{course.messageCount}</TableCell>
                   <TableCell>
-                    {format(new Date(course.lastUsed), 'dd MMM yyyy HH:mm', { locale: tr })}
+                    {course.lastUsed 
+                      ? format(new Date(course.lastUsed), 'dd MMM yyyy HH:mm', { locale: tr })
+                      : 'N/A'}
                   </TableCell>
                 </TableRow>
               ))}
