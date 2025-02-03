@@ -47,10 +47,16 @@ const Reports = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
       const [statsRes, userActivityRes, courseUsageRes] = await Promise.all([
-        axios.get('/api/reports/stats'),
-        axios.get('/api/reports/user-activity'),
-        axios.get('/api/reports/course-usage')
+        axios.get('/api/reports/stats', { headers }),
+        axios.get('/api/reports/user-activity', { headers }),
+        axios.get('/api/reports/course-usage', { headers })
       ]);
       setStats(statsRes.data);
       setUserActivity(userActivityRes.data);

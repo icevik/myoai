@@ -2,34 +2,46 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-  name: {
+  username: {
     type: String,
-    required: [true, 'İsim alanı zorunludur'],
-    trim: true,
-    minlength: [2, 'İsim en az 2 karakter olmalıdır'],
-    maxlength: [50, 'İsim en fazla 50 karakter olabilir']
-  },
-  email: {
-    type: String,
-    required: [true, 'E-posta alanı zorunludur'],
     unique: true,
-    trim: true,
-    lowercase: true,
-    match: [/@(std\.)?yeditepe\.edu\.tr$/, 'Geçerli bir Yeditepe e-posta adresi giriniz']
+    sparse: true,
+    trim: true
   },
   password: {
     type: String,
-    required: [true, 'Şifre alanı zorunludur'],
+    required: [true, 'Şifre zorunludur'],
     minlength: [6, 'Şifre en az 6 karakter olmalıdır']
+  },
+  name: {
+    type: String,
+    required: [true, 'İsim zorunludur'],
+    trim: true
+  },
+  email: {
+    type: String,
+    required: [true, 'Email zorunludur'],
+    unique: true,
+    trim: true,
+    lowercase: true,
+    match: [/@yeditepe\.edu\.tr$/, 'Lütfen geçerli bir Yeditepe email adresi girin']
   },
   role: {
     type: String,
-    enum: ['student', 'admin'],
-    default: 'student'
+    enum: ['user', 'admin'],
+    default: 'user'
   },
   isApproved: {
     type: Boolean,
     default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   },
   courses: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -51,7 +63,7 @@ userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
-    const salt = await bcrypt.genSalt(12);
+    const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {

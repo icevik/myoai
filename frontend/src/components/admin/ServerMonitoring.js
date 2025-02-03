@@ -7,9 +7,14 @@ import {
   Typography,
   Grid,
   CircularProgress,
-  LinearProgress
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  Chip
 } from '@mui/material';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 const ServerMonitoring = () => {
@@ -19,7 +24,13 @@ const ServerMonitoring = () => {
 
   const fetchServerStatus = async () => {
     try {
-      const response = await axios.get('/api/courses/status');
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/api/monitoring/status', {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       setServerStatus(response.data);
       setError(null);
     } catch (err) {
@@ -53,7 +64,7 @@ const ServerMonitoring = () => {
   }
 
   const memoryUsagePercent = ((serverStatus.memory.used / serverStatus.memory.total) * 100).toFixed(1);
-  const uptimeInSeconds = serverStatus.uptime;
+  const uptimeInSeconds = serverStatus.system.uptime;
 
   return (
     <Box p={3}>
@@ -71,9 +82,18 @@ const ServerMonitoring = () => {
               <Typography>Çekirdek Sayısı: {serverStatus.cpu.cores}</Typography>
               <Typography>Hız: {serverStatus.cpu.speed} MHz</Typography>
               <Typography>Yük Ortalaması: {serverStatus.cpu.loadAvg.join(', ')}</Typography>
+              <Box mt={2}>
+                <Typography gutterBottom>CPU Kullanımı:</Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(serverStatus.cpu.loadAvg[0] * 10, 100)}
+                  sx={{ height: 10, borderRadius: 5 }}
+                />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
+
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -81,6 +101,7 @@ const ServerMonitoring = () => {
                 Bellek Kullanımı
               </Typography>
               <Box mb={2}>
+                <Typography gutterBottom>RAM:</Typography>
                 <LinearProgress
                   variant="determinate"
                   value={parseFloat(memoryUsagePercent)}
@@ -94,20 +115,98 @@ const ServerMonitoring = () => {
                 Toplam: {(serverStatus.memory.total / 1024 / 1024 / 1024).toFixed(2)} GB
               </Typography>
               <Typography>Kullanım Oranı: {memoryUsagePercent}%</Typography>
+
+              <Box mt={3}>
+                <Typography gutterBottom>SWAP:</Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={(serverStatus.swap.used / serverStatus.swap.total) * 100}
+                  sx={{ height: 10, borderRadius: 5 }}
+                />
+                <Typography>
+                  Kullanılan: {serverStatus.swap.used} MB / {serverStatus.swap.total} MB
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Disk Kullanımı
+              </Typography>
+              <Box mb={2}>
+                <LinearProgress
+                  variant="determinate"
+                  value={parseInt(serverStatus.disk.usagePercent)}
+                  sx={{ height: 10, borderRadius: 5 }}
+                />
+              </Box>
+              <Typography>Toplam: {serverStatus.disk.total}</Typography>
+              <Typography>Kullanılan: {serverStatus.disk.used}</Typography>
+              <Typography>Boş: {serverStatus.disk.free}</Typography>
+              <Typography>Kullanım: {serverStatus.disk.usagePercent}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Docker Konteynerleri
+              </Typography>
+              <List>
+                {serverStatus.docker.containers.map((container, index) => (
+                  <React.Fragment key={container.name}>
+                    <ListItem>
+                      <ListItemText
+                        primary={container.name}
+                        secondary={container.status}
+                      />
+                      <Chip
+                        label={container.status.includes('Up') ? 'Çalışıyor' : 'Durdu'}
+                        color={container.status.includes('Up') ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </ListItem>
+                    {index < serverStatus.docker.containers.length - 1 && <Divider />}
+                  </React.Fragment>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
         <Grid item xs={12}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Sistem Bilgileri
               </Typography>
-              <Typography>
-                Çalışma Süresi: {formatDistanceToNow(Date.now() - uptimeInSeconds * 1000, { locale: tr })}
-              </Typography>
-              <Typography>Platform: {serverStatus.platform}</Typography>
-              <Typography>Sunucu Adı: {serverStatus.hostname}</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Typography>
+                    Çalışma Süresi: {formatDistanceToNow(Date.now() - uptimeInSeconds * 1000, { locale: tr })}
+                  </Typography>
+                  <Typography>Platform: {serverStatus.system.platform}</Typography>
+                  <Typography>Sürüm: {serverStatus.system.release}</Typography>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Typography>Sunucu Adı: {serverStatus.system.hostname}</Typography>
+                  <Typography>Mimari: {serverStatus.system.arch}</Typography>
+                  <Typography>Sistem Tipi: {serverStatus.system.type}</Typography>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Typography>Process ID: {serverStatus.process.pid}</Typography>
+                  <Typography>
+                    Process Bellek: {(serverStatus.process.memory.heapUsed / 1024 / 1024).toFixed(2)} MB
+                  </Typography>
+                  <Typography>Bağlantı Sayısı: {serverStatus.network.connections}</Typography>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>

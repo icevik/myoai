@@ -1,144 +1,130 @@
 const express = require('express');
 const router = express.Router();
+const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Course = require('../models/Course');
-const Conversation = require('../models/Conversation');
 const { protect, admin } = require('../middleware/auth');
 
-// Genel istatistikleri getir
+// Genel istatistikler
 router.get('/stats', protect, admin, async (req, res) => {
   try {
+    console.log('İstatistik raporu isteği alındı');
+    const [
+      totalUsers,
+      totalChats,
+      totalCourses,
+      totalMessages
+    ] = await Promise.all([
+      User.countDocuments(),
+      Conversation.countDocuments(),
+      Course.countDocuments(),
+      Conversation.aggregate([
+        { $unwind: '$messages' },
+        { $group: { _id: null, count: { $sum: 1 } } }
+      ]).then(result => result[0]?.count || 0)
+    ]);
+
     const stats = {
-      users: {
-        total: await User.countDocuments(),
-        approved: await User.countDocuments({ isApproved: true }),
-        pending: await User.countDocuments({ isApproved: false }),
-        students: await User.countDocuments({ role: 'student' }),
-        admins: await User.countDocuments({ role: 'admin' })
-      },
-      courses: {
-        total: await Course.countDocuments(),
-        byCategory: await Course.aggregate([
-          {
-            $group: {
-              _id: '$category',
-              count: { $sum: 1 }
-            }
-          }
-        ])
-      },
-      conversations: {
-        total: await Conversation.countDocuments(),
-        messageCount: await Conversation.aggregate([
-          {
-            $project: {
-              messageCount: { $size: '$messages' }
-            }
-          },
-          {
-            $group: {
-              _id: null,
-              total: { $sum: '$messageCount' }
-            }
-          }
-        ]).then(result => result[0]?.total || 0)
-      }
+      users: totalUsers,
+      chats: totalChats,
+      courses: totalCourses,
+      messages: totalMessages
     };
 
+    console.log('İstatistikler:', stats);
     res.json(stats);
   } catch (error) {
     console.error('İstatistikler alınırken hata:', error);
-    res.status(500).json({ message: 'Sunucu hatası' });
+    res.status(500).json({ message: 'İstatistikler alınamadı', error: error.message });
   }
 });
 
-// Kullanıcı aktivite raporu
+// Kullanıcı aktiviteleri
 router.get('/user-activity', protect, admin, async (req, res) => {
   try {
+    console.log('Kullanıcı aktiviteleri raporu isteği alındı');
     const activities = await Conversation.aggregate([
-      {
-        $group: {
-          _id: '$userId',
-          messageCount: { $sum: { $size: '$messages' } },
-          lastActivity: { $max: '$lastMessageAt' },
-          courseCount: { $addToSet: '$courseCode' }
-        }
-      },
       {
         $lookup: {
           from: 'users',
-          localField: '_id',
+          localField: 'userId',
           foreignField: '_id',
           as: 'user'
         }
       },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
       {
-        $unwind: '$user'
-      },
-      {
-        $project: {
-          _id: 1,
-          name: '$user.name',
-          email: '$user.email',
-          messageCount: 1,
-          lastActivity: 1,
-          courseCount: { $size: '$courseCount' }
+        $group: {
+          _id: '$userId',
+          userName: { $first: { $ifNull: ['$user.name', 'Bilinmeyen Kullanıcı'] } },
+          userEmail: { $first: { $ifNull: ['$user.email', 'bilinmeyen@email.com'] } },
+          totalChats: { $sum: 1 },
+          totalMessages: { $sum: { $size: { $ifNull: ['$messages', []] } } },
+          lastActivity: { $max: '$updatedAt' }
         }
       },
-      {
-        $sort: { lastActivity: -1 }
-      }
+      { $sort: { totalMessages: -1 } }
     ]);
 
+    console.log('Kullanıcı aktiviteleri:', activities);
     res.json(activities);
   } catch (error) {
     console.error('Kullanıcı aktiviteleri alınırken hata:', error);
-    res.status(500).json({ message: 'Sunucu hatası' });
+    res.status(500).json({ message: 'Kullanıcı aktiviteleri alınamadı', error: error.message });
   }
 });
 
-// Ders kullanım raporu
+// Kurs kullanım istatistikleri
 router.get('/course-usage', protect, admin, async (req, res) => {
   try {
-    const usage = await Conversation.aggregate([
+    console.log('Kurs kullanım raporu isteği alındı');
+    const courseUsage = await Conversation.aggregate([
       {
-        $group: {
-          _id: '$courseCode',
-          userCount: { $addToSet: '$userId' },
-          messageCount: { $sum: { $size: '$messages' } },
-          lastUsed: { $max: '$lastMessageAt' }
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user'
         }
       },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
       {
         $lookup: {
           from: 'courses',
-          localField: '_id',
-          foreignField: 'code',
+          localField: 'courseId',
+          foreignField: '_id',
           as: 'course'
         }
       },
+      { $unwind: { path: '$course', preserveNullAndEmptyArrays: true } },
       {
-        $unwind: '$course'
+        $group: {
+          _id: '$courseId',
+          courseName: { $first: { $ifNull: ['$course.name', 'Bilinmeyen Kurs'] } },
+          totalChats: { $sum: 1 },
+          totalMessages: { $sum: { $size: { $ifNull: ['$messages', []] } } },
+          uniqueUsers: { $addToSet: '$userId' },
+          lastUsed: { $max: '$updatedAt' }
+        }
       },
       {
         $project: {
           _id: 1,
-          name: '$course.name',
-          category: '$course.category',
-          userCount: { $size: '$userCount' },
-          messageCount: 1,
+          courseName: 1,
+          totalChats: 1,
+          totalMessages: 1,
+          uniqueUsers: { $size: '$uniqueUsers' },
           lastUsed: 1
         }
       },
-      {
-        $sort: { messageCount: -1 }
-      }
+      { $sort: { totalMessages: -1 } }
     ]);
 
-    res.json(usage);
+    console.log('Kurs kullanım istatistikleri:', courseUsage);
+    res.json(courseUsage);
   } catch (error) {
-    console.error('Ders kullanım raporu alınırken hata:', error);
-    res.status(500).json({ message: 'Sunucu hatası' });
+    console.error('Kurs kullanım istatistikleri alınırken hata:', error);
+    res.status(500).json({ message: 'Kurs kullanım istatistikleri alınamadı', error: error.message });
   }
 });
 
