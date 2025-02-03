@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const courseRoutes = require('./routes/courses');
 const chatRoutes = require('./routes/chat');
 const userRoutes = require('./routes/users');
+const categoriesRoutes = require('./routes/categories');
 
 // Environment variables
 dotenv.config();
@@ -17,7 +18,7 @@ const app = express();
 
 // CORS ayarları
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://34.136.154.58:3000',
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -55,10 +56,11 @@ app.get('/health', (req, res) => {
 });
 
 // Route'ları kullan
-app.use('/auth', authRoutes);
-app.use('/courses', courseRoutes);
-app.use('/chat', chatRoutes);
-app.use('/users', userRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/categories', categoriesRoutes);
 
 // 404 handler
 app.use((req, res) => {

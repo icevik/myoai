@@ -27,16 +27,20 @@ const conversationSchema = new mongoose.Schema({
     required: true
   },
   messages: [messageSchema],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
+  lastMessageAt: {
     type: Date,
     default: Date.now
   }
 }, {
   timestamps: true
+});
+
+// Yeni mesaj eklendiğinde lastMessageAt'i güncelle
+conversationSchema.pre('save', function(next) {
+  if (this.messages && this.messages.length > 0) {
+    this.lastMessageAt = this.messages[this.messages.length - 1].timestamp;
+  }
+  next();
 });
 
 module.exports = mongoose.model('Conversation', conversationSchema); 
