@@ -56,16 +56,44 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     try {
+      // Form validasyonu
+      if (!formData.email || !formData.password) {
+        setError('Email ve şifre zorunludur');
+        return;
+      }
+
+      // Email format kontrolü
+      if (!formData.email.match(/@(std\.)?yeditepe\.edu\.tr$/)) {
+        setError('Geçerli bir Yeditepe email adresi giriniz');
+        return;
+      }
+
+      // Şifre uzunluk kontrolü
+      if (formData.password.length < 6) {
+        setError('Şifre en az 6 karakter olmalıdır');
+        return;
+      }
+
+      console.log('Giriş denemesi:', { email: formData.email });
       await login(formData.email, formData.password);
+
       const user = JSON.parse(localStorage.getItem('user'));
+      console.log('Giriş başarılı, yönlendiriliyor...', {
+        role: user?.role,
+        isApproved: user?.isApproved
+      });
+
       if (user && user.role === 'admin') {
         history.push('/admin');
       } else {
         history.push('/dashboard');
       }
     } catch (error) {
-      setError(error.toString());
+      console.error('Giriş hatası:', error);
+      setError(typeof error === 'string' ? error : 'Giriş yapılırken bir hata oluştu');
     }
   };
 

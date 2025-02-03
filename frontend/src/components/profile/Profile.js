@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useHistory } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -7,241 +6,255 @@ import {
   TextField,
   Button,
   Grid,
-  AppBar,
-  Toolbar,
-  IconButton,
-  Snackbar,
+  Box,
+  Avatar,
+  Divider,
   Alert,
-  styled
+  IconButton,
+  Card,
+  CardContent,
+  Chip,
+  useTheme
 } from '@mui/material';
-import { Logout as LogoutIcon } from '@mui/icons-material';
-import axios from 'axios';
+import {
+  Save as SaveIcon,
+  Edit as EditIcon,
+  School as SchoolIcon,
+  Email as EmailIcon,
+  Person as PersonIcon,
+  VpnKey as KeyIcon
+} from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-
-const Root = styled('div')(({ theme }) => ({
-  flexGrow: 1,
-  minHeight: '100vh',
-  backgroundColor: theme.palette.background.default
-}));
-
-const StyledAppBar = styled(AppBar)(({ theme }) => ({
-  marginBottom: theme.spacing(4)
-}));
-
-const Title = styled(Typography)(({ theme }) => ({
-  flexGrow: 1
-}));
-
-const StyledContainer = styled(Container)(({ theme }) => ({
-  marginTop: theme.spacing(4)
-}));
-
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(4)
-}));
-
-const Form = styled('form')(({ theme }) => ({
-  width: '100%',
-  marginTop: theme.spacing(2)
-}));
-
-const SubmitButton = styled(Button)(({ theme }) => ({
-  margin: theme.spacing(3, 0, 2)
-}));
-
-const Section = styled('div')(({ theme }) => ({
-  marginBottom: theme.spacing(4)
-}));
+import axios from 'axios';
+import { API_URL } from '../../config';
 
 const Profile = () => {
-  const history = useHistory();
-  const { user, logout } = useAuth();
-  const [passwordForm, setPasswordForm] = useState({
+  const theme = useTheme();
+  const { user } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    name: user?.name || '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
-  const [alert, setAlert] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
-  });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handlePasswordChange = (e) => {
-    setPasswordForm({
-      ...passwordForm,
-      [e.target.name]: e.target.value
-    });
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handlePasswordSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setAlert({
-        open: true,
-        message: 'Yeni şifreler eşleşmiyor',
-        severity: 'error'
-      });
-      return;
-    }
+    setError('');
+    setSuccess('');
+    setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        'http://34.28.93.220:5000/api/auth/change-password',
-        {
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
+      // Şifre değişikliği kontrolü
+      if (formData.newPassword) {
+        if (formData.newPassword !== formData.confirmPassword) {
+          setError('Yeni şifreler eşleşmiyor');
+          setLoading(false);
+          return;
         }
-      );
 
-      setPasswordForm({
+        if (formData.newPassword.length < 6) {
+          setError('Şifre en az 6 karakter olmalıdır');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Profil bilgilerini güncelle
+      if (formData.name !== user.name) {
+        await axios.put(`${API_URL}/users/${user._id}`, {
+          name: formData.name
+        }, { headers });
+      }
+
+      // Şifre değişikliği
+      if (formData.currentPassword && formData.newPassword) {
+        await axios.put(`${API_URL}/auth/change-password`, {
+          currentPassword: formData.currentPassword,
+          newPassword: formData.newPassword
+        }, { headers });
+      }
+
+      setSuccess('Profil başarıyla güncellendi');
+      setEditing(false);
+      setFormData({
+        ...formData,
         currentPassword: '',
         newPassword: '',
         confirmPassword: ''
       });
-
-      setAlert({
-        open: true,
-        message: 'Şifreniz başarıyla güncellendi',
-        severity: 'success'
-      });
     } catch (error) {
-      setAlert({
-        open: true,
-        message: error.response?.data?.message || 'Şifre güncellenirken hata oluştu',
-        severity: 'error'
-      });
+      setError(error.response?.data?.message || 'Güncelleme sırasında bir hata oluştu');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    history.push('/');
-  };
-
-  const handleCloseAlert = () => {
-    setAlert({ ...alert, open: false });
-  };
-
   return (
-    <Root>
-      <StyledAppBar position="static">
-        <Toolbar>
-          <Title variant="h6">
-            Profil
-          </Title>
-          <IconButton color="inherit" onClick={handleLogout}>
-            <LogoutIcon />
-          </IconButton>
-        </Toolbar>
-      </StyledAppBar>
-
-      <StyledContainer>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={6}>
-            <StyledPaper>
-              <Section>
-                <Typography variant="h6" gutterBottom>
-                  Profil Bilgileri
+    <Container maxWidth="md">
+      <Box sx={{ py: 4 }}>
+        <Card elevation={0}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+              <Avatar
+                sx={{
+                  width: 100,
+                  height: 100,
+                  bgcolor: theme.palette.primary.main,
+                  fontSize: '2.5rem',
+                  mr: 3
+                }}
+              >
+                {user?.name?.charAt(0).toUpperCase()}
+              </Avatar>
+              <Box>
+                <Typography variant="h4" gutterBottom>
+                  {user?.name}
                 </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Ad Soyad"
-                      value={user?.name || ''}
-                      disabled
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="E-posta"
-                      value={user?.email || ''}
-                      disabled
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Rol"
-                      value={user?.role === 'admin' ? 'Admin' : 'Öğrenci'}
-                      disabled
-                    />
-                  </Grid>
+                <Chip
+                  icon={<SchoolIcon />}
+                  label={user?.role === 'admin' ? 'Admin' : 'Öğrenci'}
+                  color={user?.role === 'admin' ? 'secondary' : 'primary'}
+                  variant="outlined"
+                />
+              </Box>
+              {!editing && (
+                <IconButton
+                  sx={{ ml: 'auto' }}
+                  onClick={() => setEditing(true)}
+                  color="primary"
+                >
+                  <EditIcon />
+                </IconButton>
+              )}
+            </Box>
+
+            {(error || success) && (
+              <Box sx={{ mb: 3 }}>
+                {error && <Alert severity="error">{error}</Alert>}
+                {success && <Alert severity="success">{success}</Alert>}
+              </Box>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <EmailIcon sx={{ mr: 2, color: 'text.secondary' }} />
+                    <Typography variant="body1">
+                      {user?.email}
+                    </Typography>
+                  </Box>
                 </Grid>
-              </Section>
 
-              <Section>
-                <Typography variant="h6" gutterBottom>
-                  Şifre Değiştir
-                </Typography>
-                <Form onSubmit={handlePasswordSubmit}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        name="currentPassword"
-                        label="Mevcut Şifre"
-                        type="password"
-                        value={passwordForm.currentPassword}
-                        onChange={handlePasswordChange}
-                        required
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        name="newPassword"
-                        label="Yeni Şifre"
-                        type="password"
-                        value={passwordForm.newPassword}
-                        onChange={handlePasswordChange}
-                        required
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        name="confirmPassword"
-                        label="Yeni Şifre Tekrar"
-                        type="password"
-                        value={passwordForm.confirmPassword}
-                        onChange={handlePasswordChange}
-                        required
-                      />
-                    </Grid>
-                  </Grid>
-                  <SubmitButton
-                    type="submit"
+                <Grid item xs={12}>
+                  <TextField
                     fullWidth
-                    variant="contained"
-                    color="primary"
-                  >
-                    Şifreyi Güncelle
-                  </SubmitButton>
-                </Form>
-              </Section>
-            </StyledPaper>
-          </Grid>
-        </Grid>
-      </StyledContainer>
+                    label="Ad Soyad"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    disabled={!editing}
+                    InputProps={{
+                      startAdornment: <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                    }}
+                  />
+                </Grid>
 
-      <Snackbar
-        open={alert.open}
-        autoHideDuration={6000}
-        onClose={handleCloseAlert}
-      >
-        <Alert onClose={handleCloseAlert} severity={alert.severity}>
-          {alert.message}
-        </Alert>
-      </Snackbar>
-    </Root>
+                {editing && (
+                  <>
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 2 }}>
+                        <Chip label="Şifre Değiştir" />
+                      </Divider>
+                    </Grid>
+
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        type="password"
+                        label="Mevcut Şifre"
+                        name="currentPassword"
+                        value={formData.currentPassword}
+                        onChange={handleChange}
+                        InputProps={{
+                          startAdornment: <KeyIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        type="password"
+                        label="Yeni Şifre"
+                        name="newPassword"
+                        value={formData.newPassword}
+                        onChange={handleChange}
+                        helperText="En az 6 karakter"
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        type="password"
+                        label="Yeni Şifre (Tekrar)"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                      />
+                    </Grid>
+                  </>
+                )}
+
+                {editing && (
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          setEditing(false);
+                          setError('');
+                          setSuccess('');
+                          setFormData({
+                            name: user?.name || '',
+                            currentPassword: '',
+                            newPassword: '',
+                            confirmPassword: ''
+                          });
+                        }}
+                      >
+                        İptal
+                      </Button>
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={loading}
+                        startIcon={<SaveIcon />}
+                      >
+                        Kaydet
+                      </Button>
+                    </Box>
+                  </Grid>
+                )}
+              </Grid>
+            </form>
+          </CardContent>
+        </Card>
+      </Box>
+    </Container>
   );
 };
 

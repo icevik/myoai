@@ -15,7 +15,7 @@ const TOKEN_REFRESH_THRESHOLD = 60 * 60; // 1 saat
 const generateToken = (user) => {
   return jwt.sign(
     { 
-      userId: user._id,
+      id: user._id,
       email: user.email,
       role: user.role
     },
@@ -41,7 +41,7 @@ const authMiddleware = async (req, res, next) => {
       const now = Date.now();
       
       if (tokenExp - now < TOKEN_REFRESH_THRESHOLD * 1000) {
-        const user = await User.findById(decoded.userId);
+        const user = await User.findById(decoded.id);
         if (!user) {
           return res.status(401).json({ message: 'Kullanıcı bulunamadı' });
         }
@@ -96,15 +96,23 @@ const registerValidation = [
 // Giriş
 router.post('/login', async (req, res) => {
   try {
-    console.log('Giriş isteği alındı:', req.body);
+    console.log('Giriş isteği alındı:', {
+      email: req.body.email,
+      hasPassword: !!req.body.password
+    });
+
     const { email, password } = req.body;
 
     if (!email || !password) {
+      console.log('Eksik bilgi:', { email: !!email, password: !!password });
       return res.status(400).json({ message: 'Email ve şifre zorunludur' });
     }
 
     const normalizedEmail = email.toLowerCase();
+    console.log('Normalized email:', normalizedEmail);
+
     const user = await User.findOne({ email: normalizedEmail });
+    console.log('Kullanıcı bulundu mu:', !!user);
 
     if (!user) {
       console.log('Kullanıcı bulunamadı:', normalizedEmail);
@@ -127,10 +135,13 @@ router.post('/login', async (req, res) => {
     }
 
     // Şifre kontrolü
+    console.log('Şifre kontrolü yapılıyor...');
     const isMatch = await user.comparePassword(password);
+    console.log('Şifre eşleşti mi:', isMatch);
+
     if (!isMatch) {
       await user.incrementLoginAttempts();
-      console.log('Şifre hatalı:', normalizedEmail);
+      console.log('Şifre hatalı, deneme sayısı artırıldı:', user.loginAttempts);
       
       if (user.isLocked()) {
         return res.status(401).json({ 
@@ -146,11 +157,8 @@ router.post('/login', async (req, res) => {
     console.log('Başarılı giriş:', normalizedEmail);
     
     // Token oluştur
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET || 'gizli-anahtar',
-      { expiresIn: '24h' }
-    );
+    const token = generateToken(user);
+    console.log('Token oluşturuldu');
 
     res.json({
       token,
@@ -227,51 +235,64 @@ router.post('/register-admin', async (req, res) => {
 });
 
 // Normal kullanıcı kaydı
-router.post('/register', async (req, res) => {
+router.post('/register', registerValidation, async (req, res) => {
   try {
+    // Validasyon hatalarını kontrol et
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validasyon hatası',
+        errors: errors.array()
+      });
+    }
+
     console.log('Kullanıcı kayıt isteği alındı:', req.body);
-    const { username, password, name, email } = req.body;
+    const { password, name, email } = req.body;
 
-    if (!username || !password || !name || !email) {
-      return res.status(400).json({ message: 'Tüm alanlar zorunludur' });
-    }
-
-    const emailRegex = /@yeditepe\.edu\.tr$/;
+    // Email formatı kontrolü
+    const emailRegex = /@(std\.)?yeditepe\.edu\.tr$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Sadece Yeditepe email adresleri kabul edilmektedir' });
+      return res.status(400).json({ 
+        message: 'Sadece @yeditepe.edu.tr veya @std.yeditepe.edu.tr uzantılı email adresleri kabul edilmektedir' 
+      });
     }
 
-    const existingUser = await User.findOne({
-      $or: [{ username }, { email: email.toLowerCase() }]
-    });
-
+    // Email kontrolü
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      return res.status(400).json({ message: 'Bu kullanıcı adı veya email zaten kullanımda' });
+      return res.status(400).json({ message: 'Bu email adresi zaten kullanımda' });
     }
 
+    // Yeni kullanıcı oluştur
     const user = new User({
-      username,
-      password, // Düz metin parola; pre-save hook burada hash yapacak
+      password,
       name,
       email: email.toLowerCase(),
-      role: 'user'
+      role: 'user',
+      isApproved: false
     });
 
     await user.save();
     console.log('Yeni kullanıcı oluşturuldu:', user);
 
     res.status(201).json({
-      message: 'Kullanıcı başarıyla oluşturuldu',
+      message: 'Kayıt başarılı. Hesabınız yönetici onayı bekliyor.',
       user: {
         id: user._id,
-        username: user.username,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        isApproved: user.isApproved
       }
     });
   } catch (error) {
     console.error('Kullanıcı kaydı sırasında hata:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: 'Validasyon hatası',
+        errors: Object.values(error.errors).map(err => err.message)
+      });
+    }
     res.status(500).json({ message: 'Sunucu hatası', error: error.message });
   }
 });
@@ -309,7 +330,7 @@ router.post('/register-request', registerValidation, async (req, res) => {
     res.status(201).json({ message: 'Kayıt talebiniz alındı. Onay için bekleyiniz.' });
   } catch (err) {
     console.error('Kayıt hatası:', err);
-    res.status(500).json({ message: 'Sunucu hatası' });
+    res.status(500).json({ message: 'Sunucu hatası', error: err.message });
   }
 });
 
@@ -347,7 +368,7 @@ router.put('/change-password', authMiddleware, [
     }
 
     const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(req.user.id);
 
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {

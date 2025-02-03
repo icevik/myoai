@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const messageSchema = new mongoose.Schema({
   role: {
     type: String,
-    enum: ['user', 'bot'],
+    enum: ['user', 'assistant'],
     required: true
   },
   content: {
@@ -17,29 +17,32 @@ const messageSchema = new mongoose.Schema({
 });
 
 const conversationSchema = new mongoose.Schema({
-  userId: {
+  user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  courseCode: {
-    type: String,
+  course: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course',
     required: true
   },
   messages: [messageSchema],
-  lastMessageAt: {
+  lastActivity: {
     type: Date,
     default: Date.now
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true
 });
 
-// Yeni mesaj eklendiğinde lastMessageAt'i güncelle
+// Yeni mesaj eklendiğinde son aktivite zamanını güncelle
 conversationSchema.pre('save', function(next) {
-  if (this.messages && this.messages.length > 0) {
-    this.lastMessageAt = this.messages[this.messages.length - 1].timestamp;
-  }
+  this.lastActivity = new Date();
   next();
 });
 

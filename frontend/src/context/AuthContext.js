@@ -108,21 +108,61 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      console.log('Login isteği:', { email, password });
+      console.log('Login isteği hazırlanıyor:', { email });
+      
+      // Email formatını kontrol et
+      if (!email.match(/@(std\.)?yeditepe\.edu\.tr$/)) {
+        throw new Error('Geçerli bir Yeditepe email adresi giriniz');
+      }
+
+      // Şifre uzunluğunu kontrol et
+      if (password.length < 6) {
+        throw new Error('Şifre en az 6 karakter olmalıdır');
+      }
+
+      console.log('Login isteği gönderiliyor...');
       const res = await axiosInstance.post('/auth/login', {
-        email,
+        email: email.toLowerCase(),
         password
       });
 
-      console.log('Login cevabı:', res.data);
+      console.log('Login cevabı alındı:', {
+        status: res.status,
+        hasToken: !!res.data.token,
+        hasUser: !!res.data.user
+      });
+
+      if (!res.data.token || !res.data.user) {
+        console.error('Geçersiz sunucu yanıtı:', res.data);
+        throw new Error('Geçersiz sunucu yanıtı');
+      }
+
       const { token, user } = res.data;
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
+
+      console.log('Login başarılı, kullanıcı:', {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      });
+
       return true;
     } catch (error) {
-      console.error('Login hatası:', error.response?.data || error.message);
-      throw error.response?.data?.message || error.message;
+      console.error('Login hatası:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+
+      if (error.response?.data?.message) {
+        throw error.response.data.message;
+      } else if (error.message) {
+        throw error.message;
+      } else {
+        throw 'Giriş yapılırken bir hata oluştu';
+      }
     }
   };
 
@@ -151,7 +191,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
-    logout
+    logout,
+    axiosInstance
   };
 
   return (
@@ -159,4 +200,6 @@ export const AuthProvider = ({ children }) => {
       {!loading && children}
     </AuthContext.Provider>
   );
-}; 
+};
+
+export { axiosInstance }; 

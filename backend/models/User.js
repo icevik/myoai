@@ -24,11 +24,11 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true,
     lowercase: true,
-    match: [/@yeditepe\.edu\.tr$/, 'Lütfen geçerli bir Yeditepe email adresi girin']
+    match: [/@(std\.)?yeditepe\.edu\.tr$/, 'Lütfen geçerli bir Yeditepe email adresi girin (@yeditepe.edu.tr veya @std.yeditepe.edu.tr)']
   },
   role: {
     type: String,
-    enum: ['user', 'admin'],
+    enum: ['user', 'admin', 'student'],
     default: 'user'
   },
   isApproved: {

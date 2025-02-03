@@ -18,10 +18,20 @@ const courseSchema = new mongoose.Schema({
     ref: 'Category',
     required: [true, 'Kategori zorunludur']
   },
+  welcomeMessage: {
+    type: String,
+    default: 'Merhaba! Size nasıl yardımcı olabilirim?'
+  },
   apiConfig: {
     host: {
       type: String,
-      required: [true, 'API host adresi zorunludur']
+      required: [true, 'API host adresi zorunludur'],
+      validate: {
+        validator: function(v) {
+          return /^https?:\/\/.+/.test(v);
+        },
+        message: 'Geçerli bir API host adresi giriniz (http:// veya https:// ile başlamalı)'
+      }
     },
     chatbotId: {
       type: String,
@@ -29,11 +39,31 @@ const courseSchema = new mongoose.Schema({
     },
     securityKey: {
       type: String,
-      required: [true, 'Güvenlik anahtarı zorunludur']
+      required: [true, 'API güvenlik anahtarı zorunludur']
     }
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true
 });
+
+// API yapılandırmasının tam olup olmadığını kontrol et
+courseSchema.methods.isApiConfigComplete = function() {
+  return this.apiConfig &&
+         this.apiConfig.host &&
+         this.apiConfig.chatbotId &&
+         this.apiConfig.securityKey;
+};
 
 module.exports = mongoose.model('Course', courseSchema); 

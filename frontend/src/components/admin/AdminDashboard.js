@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useHistory } from 'react-router-dom';
 import {
   Container,
   Grid,
@@ -18,8 +17,6 @@ import {
   DialogActions,
   TextField,
   IconButton,
-  AppBar,
-  Toolbar,
   Tab,
   Tabs,
   Select,
@@ -31,8 +28,10 @@ import {
   ListItemText,
   ListItemSecondary,
   Divider,
-  styled,
-  Box
+  Box,
+  Alert,
+  Chip,
+  useTheme
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,7 +39,6 @@ import {
   Edit as EditIcon,
   Check as CheckIcon,
   Block as BlockIcon,
-  Logout as LogoutIcon,
   Chat as ChatIcon
 } from '@mui/icons-material';
 import axios from 'axios';
@@ -52,35 +50,9 @@ import Reports from './Reports';
 
 const API_URL = '/api';
 
-const Root = styled('div')(({ theme }) => ({
-  flexGrow: 1,
-  backgroundColor: theme.palette.background.default,
-  minHeight: '100vh'
-}));
-
-const StyledAppBar = styled(AppBar)(({ theme }) => ({
-  marginBottom: theme.spacing(4)
-}));
-
-const Title = styled(Typography)(({ theme }) => ({
-  flexGrow: 1
-}));
-
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3)
-}));
-
-const AddButton = styled(Button)(({ theme }) => ({
-  marginBottom: theme.spacing(3)
-}));
-
-const TableContainerStyled = styled(TableContainer)(({ theme }) => ({
-  marginBottom: theme.spacing(3)
-}));
-
 const AdminDashboard = () => {
-  const history = useHistory();
-  const { logout } = useAuth();
+  const theme = useTheme();
+  const { user } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [users, setUsers] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -92,6 +64,7 @@ const AdminDashboard = () => {
     code: '',
     name: '',
     category: '',
+    welcomeMessage: '',
     apiConfig: {
       host: '',
       chatbotId: '',
@@ -114,6 +87,7 @@ const AdminDashboard = () => {
     password: ''
   });
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadData();
@@ -139,16 +113,12 @@ const AdminDashboard = () => {
       setCategories(categoriesRes.data);
     } catch (error) {
       console.error('Veri yüklenirken hata:', error);
+      setError('Veriler yüklenirken bir hata oluştu');
     }
   };
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
-  };
-
-  const handleLogout = () => {
-    logout();
-    history.push('/');
   };
 
   const handleApproveUser = async (userId) => {
@@ -164,6 +134,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Kullanıcı onaylanırken hata:', error);
+      setError('Kullanıcı onaylanırken bir hata oluştu');
     }
   };
 
@@ -180,6 +151,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Kullanıcı banlanırken hata:', error);
+      setError('Kullanıcı banlanırken bir hata oluştu');
     }
   };
 
@@ -189,6 +161,7 @@ const AdminDashboard = () => {
       code: course.code,
       name: course.name,
       category: course.category?._id || course.category,
+      welcomeMessage: course.welcomeMessage || '',
       apiConfig: {
         host: course.apiConfig?.host || '',
         chatbotId: course.apiConfig?.chatbotId || '',
@@ -202,12 +175,10 @@ const AdminDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       if (selectedCourse) {
-        // Güncelleme işlemi
         await axios.put(`${API_URL}/courses/${selectedCourse.code}`, courseForm, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        // Yeni ekleme işlemi
         await axios.post(`${API_URL}/courses`, courseForm, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -218,6 +189,7 @@ const AdminDashboard = () => {
         code: '',
         name: '',
         category: '',
+        welcomeMessage: '',
         apiConfig: {
           host: '',
           chatbotId: '',
@@ -227,6 +199,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Ders işlemi sırasında hata:', error);
+      setError('Ders işlemi sırasında bir hata oluştu');
     }
   };
 
@@ -239,6 +212,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Ders silinirken hata:', error);
+      setError('Ders silinirken bir hata oluştu');
     }
   };
 
@@ -255,6 +229,7 @@ const AdminDashboard = () => {
       setOpenChatDialog(true);
     } catch (error) {
       console.error('Konuşma detayları alınırken hata:', error);
+      setError('Konuşma detayları alınırken bir hata oluştu');
     }
   };
 
@@ -270,6 +245,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Konuşma silinirken hata:', error);
+      setError('Konuşma silinirken bir hata oluştu');
     }
   };
 
@@ -288,6 +264,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Kategori eklenirken hata:', error);
+      setError('Kategori eklenirken bir hata oluştu');
     }
   };
 
@@ -300,6 +277,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Kategori silinirken hata:', error);
+      setError('Kategori silinirken bir hata oluştu');
     }
   };
 
@@ -349,6 +327,7 @@ const AdminDashboard = () => {
       loadData();
     } catch (error) {
       console.error('Kullanıcı güncellenirken hata:', error);
+      setError('Kullanıcı güncellenirken bir hata oluştu');
     }
   };
 
@@ -362,492 +341,559 @@ const AdminDashboard = () => {
         loadData();
       } catch (error) {
         console.error('Kullanıcı silinirken hata:', error);
+        setError('Kullanıcı silinirken bir hata oluştu');
       }
     }
   };
 
   return (
-    <Root>
-      <StyledAppBar position="static">
-        <Toolbar>
-          <Title variant="h6">
-            Admin Paneli
-          </Title>
-          <IconButton color="inherit" onClick={handleLogout}>
-            <LogoutIcon />
-          </IconButton>
-        </Toolbar>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          centered
-          indicatorColor="secondary"
-          textColor="inherit"
-        >
-          <Tab label="Kullanıcılar" />
-          <Tab label="Kategoriler" />
-          <Tab label="Dersler" />
-          <Tab label="Konuşmalar" />
-          <Tab label="Sunucu Durumu" />
-          <Tab label="Raporlar" />
-        </Tabs>
-      </StyledAppBar>
+    <Container maxWidth="xl">
+      <Box sx={{ py: 4 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
 
-      <Container>
-        {tabValue === 0 && (
-          <StyledPaper>
-            <Typography variant="h6" gutterBottom>
-              Kullanıcı Yönetimi
-            </Typography>
-            <TableContainerStyled>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Ad</TableCell>
-                    <TableCell>E-posta</TableCell>
-                    <TableCell>Rol</TableCell>
-                    <TableCell>Durum</TableCell>
-                    <TableCell>İşlemler</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={String(user._id)}>
-                      <TableCell>{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.role}</TableCell>
-                      <TableCell>
-                        {user.isApproved ? 'Onaylı' : 'Onay Bekliyor'}
-                      </TableCell>
-                      <TableCell>
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleEditUser(user)}
-                          size="small"
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        {!user.isApproved && (
+        <Paper elevation={0} sx={{ mb: 3 }}>
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            centered
+            indicatorColor="primary"
+            textColor="primary"
+            sx={{
+              borderBottom: 1,
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              borderRadius: '12px 12px 0 0'
+            }}
+          >
+            <Tab label="Kullanıcılar" />
+            <Tab label="Kategoriler" />
+            <Tab label="Dersler" />
+            <Tab label="Konuşmalar" />
+            <Tab label="Sunucu Durumu" />
+            <Tab label="Raporlar" />
+          </Tabs>
+        </Paper>
+
+        <Box sx={{ mt: 3 }}>
+          {tabValue === 0 && (
+            <Paper elevation={0}>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Ad</TableCell>
+                      <TableCell>E-posta</TableCell>
+                      <TableCell>Rol</TableCell>
+                      <TableCell>Durum</TableCell>
+                      <TableCell>İşlemler</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {users.map((user) => (
+                      <TableRow key={String(user._id)}>
+                        <TableCell>{user.name}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={user.role === 'admin' ? 'Admin' : 'Öğrenci'}
+                            color={user.role === 'admin' ? 'secondary' : 'primary'}
+                            variant="outlined"
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={user.isApproved ? 'Onaylı' : 'Onay Bekliyor'}
+                            color={user.isApproved ? 'success' : 'warning'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
                           <IconButton
-                            color="success"
-                            onClick={() => handleApproveUser(user._id)}
+                            color="primary"
+                            onClick={() => handleEditUser(user)}
                             size="small"
                           >
-                            <CheckIcon />
+                            <EditIcon />
                           </IconButton>
-                        )}
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDeleteUser(user._id)}
-                          size="small"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
+                          {!user.isApproved && (
+                            <IconButton
+                              color="success"
+                              onClick={() => handleApproveUser(user._id)}
+                              size="small"
+                            >
+                              <CheckIcon />
+                            </IconButton>
+                          )}
+                          <IconButton
+                            color="error"
+                            onClick={() => handleDeleteUser(user._id)}
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
+
+          {tabValue === 1 && (
+            <Paper elevation={0}>
+              <Box sx={{ p: 2 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setOpenCategoryDialog(true)}
+                  sx={{ mb: 3 }}
+                >
+                  Yeni Kategori Ekle
+                </Button>
+              </Box>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Kategori Kodu</TableCell>
+                      <TableCell>Kategori Adı</TableCell>
+                      <TableCell>Açıklama</TableCell>
+                      <TableCell>İşlemler</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainerStyled>
-          </StyledPaper>
-        )}
+                  </TableHead>
+                  <TableBody>
+                    {categories.map((category) => (
+                      <TableRow key={category._id}>
+                        <TableCell>{category.code}</TableCell>
+                        <TableCell>{category.name}</TableCell>
+                        <TableCell>{category.description}</TableCell>
+                        <TableCell>
+                          <IconButton
+                            color="error"
+                            onClick={() => handleDeleteCategory(category._id)}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
 
-        {tabValue === 1 && (
-          <StyledPaper>
-            <Typography variant="h6" gutterBottom>
-              Kategori Yönetimi
-            </Typography>
-            <AddButton
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => setOpenCategoryDialog(true)}
-            >
-              Yeni Kategori Ekle
-            </AddButton>
-            <TableContainerStyled>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Kategori Kodu</TableCell>
-                    <TableCell>Kategori Adı</TableCell>
-                    <TableCell>Açıklama</TableCell>
-                    <TableCell>İşlemler</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {categories.map((category) => (
-                    <TableRow key={category._id}>
-                      <TableCell>{category.code}</TableCell>
-                      <TableCell>{category.name}</TableCell>
-                      <TableCell>{category.description}</TableCell>
-                      <TableCell>
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDeleteCategory(category._id)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
+          {tabValue === 2 && (
+            <Paper elevation={0}>
+              <Box sx={{ p: 2 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setOpenDialog(true)}
+                  sx={{ mb: 3 }}
+                >
+                  Yeni Ders Ekle
+                </Button>
+              </Box>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Ders Kodu</TableCell>
+                      <TableCell>Ders Adı</TableCell>
+                      <TableCell>Kategori</TableCell>
+                      <TableCell>İşlemler</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainerStyled>
-          </StyledPaper>
-        )}
+                  </TableHead>
+                  <TableBody>
+                    {courses.map((course) => (
+                      <TableRow key={String(course._id)}>
+                        <TableCell>{course.code}</TableCell>
+                        <TableCell>{course.name}</TableCell>
+                        <TableCell>
+                          {course.category && typeof course.category === 'object'
+                            ? course.category.name
+                            : course.category}
+                        </TableCell>
+                        <TableCell>
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleEditCourse(course)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton
+                            color="error"
+                            onClick={() => handleDeleteCourse(course.code)}
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
 
-        {tabValue === 2 && (
-          <StyledPaper>
-            <Typography variant="h6" gutterBottom>
-              Ders Yönetimi
-            </Typography>
-            <AddButton
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => setOpenDialog(true)}
-            >
-              Yeni Ders Ekle
-            </AddButton>
-            <TableContainerStyled>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Ders Kodu</TableCell>
-                    <TableCell>Ders Adı</TableCell>
-                    <TableCell>Kategori</TableCell>
-                    <TableCell>İşlemler</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {courses.map((course) => (
-                    <TableRow key={String(course._id)}>
-                      <TableCell>{course.code}</TableCell>
-                      <TableCell>{course.name}</TableCell>
-                      <TableCell>
-                        {course.category && typeof course.category === 'object'
-                          ? course.category.name || course.category.code || 'N/A'
-                          : course.category || 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleEditCourse(course)}
-                          size="small"
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton
-                          color="error"
-                          onClick={() => handleDeleteCourse(course.code)}
-                          size="small"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainerStyled>
-          </StyledPaper>
-        )}
+          {tabValue === 3 && (
+            <Paper elevation={0}>
+              <List>
+                {conversations.map((conversation) => (
+                  <React.Fragment key={conversation._id}>
+                    <ListItem
+                      secondaryAction={
+                        <>
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleViewConversation(conversation._id)}
+                          >
+                            <ChatIcon />
+                          </IconButton>
+                          <IconButton
+                            edge="end"
+                            color="error"
+                            onClick={() => handleDeleteConversation(conversation._id)}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </>
+                      }
+                    >
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle1">
+                              {conversation.userId.name}
+                            </Typography>
+                            <Chip
+                              label={conversation.courseCode}
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                            />
+                          </Box>
+                        }
+                        secondary={format(new Date(conversation.lastMessageAt), 'PPpp', { locale: tr })}
+                      />
+                    </ListItem>
+                    <Divider />
+                  </React.Fragment>
+                ))}
+              </List>
+            </Paper>
+          )}
 
-        {tabValue === 3 && (
-          <StyledPaper>
-            <Typography variant="h6" gutterBottom>
-              Konuşma Geçmişi
-            </Typography>
-            <List>
-              {conversations.map((conversation) => (
-                <React.Fragment key={conversation._id}>
-                  <ListItem
-                    secondaryAction={
-                      <>
-                        <IconButton
-                          edge="end"
-                          onClick={() => handleViewConversation(conversation._id)}
-                        >
-                          <ChatIcon />
-                        </IconButton>
-                        <IconButton
-                          edge="end"
-                          color="error"
-                          onClick={() => handleDeleteConversation(conversation._id)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </>
-                    }
-                  >
-                    <ListItemText
-                      primary={`${conversation.userId.name} - ${conversation.courseCode}`}
-                      secondary={format(new Date(conversation.lastMessageAt), 'PPpp', { locale: tr })}
-                    />
-                  </ListItem>
-                  <Divider />
-                </React.Fragment>
-              ))}
-            </List>
-          </StyledPaper>
-        )}
+          {tabValue === 4 && (
+            <Paper elevation={0}>
+              <ServerMonitoring />
+            </Paper>
+          )}
 
-        {tabValue === 4 && (
-          <StyledPaper>
-            <ServerMonitoring />
-          </StyledPaper>
-        )}
+          {tabValue === 5 && (
+            <Paper elevation={0}>
+              <Reports />
+            </Paper>
+          )}
+        </Box>
+      </Box>
 
-        {tabValue === 5 && (
-          <StyledPaper>
-            <Reports />
-          </StyledPaper>
-        )}
-
-        {/* Ders Ekleme/Düzenleme Dialog */}
-        <Dialog open={openDialog} onClose={() => {
+      {/* Ders Ekleme/Düzenleme Dialog */}
+      <Dialog
+        open={openDialog}
+        onClose={() => {
           setOpenDialog(false);
           setSelectedCourse(null);
           setCourseForm({
             code: '',
             name: '',
             category: '',
+            welcomeMessage: '',
             apiConfig: {
               host: '',
               chatbotId: '',
               securityKey: ''
             }
           });
-        }}>
-          <DialogTitle>{selectedCourse ? 'Ders Düzenle' : 'Yeni Ders Ekle'}</DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Ders Kodu"
-                  value={courseForm.code}
-                  onChange={(e) => setCourseForm({ ...courseForm, code: e.target.value })}
-                  margin="normal"
-                  disabled={!!selectedCourse}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Ders Adı"
-                  value={courseForm.name}
-                  onChange={(e) => setCourseForm({ ...courseForm, name: e.target.value })}
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Kategori</InputLabel>
-                  <Select
-                    value={courseForm.category}
-                    onChange={(e) => setCourseForm({ ...courseForm, category: e.target.value })}
-                  >
-                    {categories.map((category) => (
-                      <MenuItem key={category._id} value={category._id}>
-                        {category.name} ({category.code})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="API Host"
-                  value={courseForm.apiConfig.host}
-                  onChange={(e) => setCourseForm({
-                    ...courseForm,
-                    apiConfig: { ...courseForm.apiConfig, host: e.target.value }
-                  })}
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Chatbot ID"
-                  value={courseForm.apiConfig.chatbotId}
-                  onChange={(e) => setCourseForm({
-                    ...courseForm,
-                    apiConfig: { ...courseForm.apiConfig, chatbotId: e.target.value }
-                  })}
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Güvenlik Anahtarı"
-                  value={courseForm.apiConfig.securityKey}
-                  onChange={(e) => setCourseForm({
-                    ...courseForm,
-                    apiConfig: { ...courseForm.apiConfig, securityKey: e.target.value }
-                  })}
-                  margin="normal"
-                />
-              </Grid>
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedCourse ? 'Ders Düzenle' : 'Yeni Ders Ekle'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Ders Kodu"
+                value={courseForm.code}
+                onChange={(e) => setCourseForm({ ...courseForm, code: e.target.value })}
+                disabled={!!selectedCourse}
+              />
             </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => {
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Ders Adı"
+                value={courseForm.name}
+                onChange={(e) => setCourseForm({ ...courseForm, name: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Kategori</InputLabel>
+                <Select
+                  value={courseForm.category}
+                  onChange={(e) => setCourseForm({ ...courseForm, category: e.target.value })}
+                  label="Kategori"
+                >
+                  {categories.map((category) => (
+                    <MenuItem key={category._id} value={category._id}>
+                      {category.name} ({category.code})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Karşılama Mesajı"
+                value={courseForm.welcomeMessage}
+                onChange={(e) => setCourseForm({ ...courseForm, welcomeMessage: e.target.value })}
+                multiline
+                rows={3}
+                helperText="Öğrenci derse girdiğinde gösterilecek karşılama mesajı"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                API Yapılandırması
+              </Typography>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="API Host"
+                value={courseForm.apiConfig.host}
+                onChange={(e) => setCourseForm({
+                  ...courseForm,
+                  apiConfig: { ...courseForm.apiConfig, host: e.target.value }
+                })}
+                helperText="Örnek: https://www.example.com"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Chatbot ID"
+                value={courseForm.apiConfig.chatbotId}
+                onChange={(e) => setCourseForm({
+                  ...courseForm,
+                  apiConfig: { ...courseForm.apiConfig, chatbotId: e.target.value }
+                })}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Güvenlik Anahtarı"
+                value={courseForm.apiConfig.securityKey}
+                onChange={(e) => setCourseForm({
+                  ...courseForm,
+                  apiConfig: { ...courseForm.apiConfig, securityKey: e.target.value }
+                })}
+                type="password"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
               setOpenDialog(false);
               setSelectedCourse(null);
               setCourseForm({
                 code: '',
                 name: '',
                 category: '',
+                welcomeMessage: '',
                 apiConfig: {
                   host: '',
                   chatbotId: '',
                   securityKey: ''
                 }
               });
-            }}>İptal</Button>
-            <Button onClick={handleAddCourse} color="primary">
-              {selectedCourse ? 'Güncelle' : 'Ekle'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+            }}
+          >
+            İptal
+          </Button>
+          <Button onClick={handleAddCourse} variant="contained" color="primary">
+            {selectedCourse ? 'Güncelle' : 'Ekle'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-        {/* Konuşma Detay Dialog */}
-        <Dialog
-          open={openChatDialog}
-          onClose={() => setOpenChatDialog(false)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>
-            Konuşma Detayı
-          </DialogTitle>
-          <DialogContent>
-            {selectedConversation && (
-              <List>
-                {selectedConversation.messages.map((message, index) => (
-                  <ListItem key={index}>
-                    <ListItemText
-                      primary={message.role === 'user' ? selectedConversation.userId.name : 'Bot'}
-                      secondary={
-                        <>
-                          <Typography component="span" variant="body2">
-                            {format(new Date(message.timestamp), 'PPpp', { locale: tr })}
-                          </Typography>
-                          <Typography component="p">
-                            {message.content}
-                          </Typography>
-                        </>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenChatDialog(false)}>Kapat</Button>
-          </DialogActions>
-        </Dialog>
+      {/* Konuşma Detay Dialog */}
+      <Dialog
+        open={openChatDialog}
+        onClose={() => setOpenChatDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Konuşma Detayı
+          <IconButton
+            onClick={() => setOpenChatDialog(false)}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <DeleteIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {selectedConversation && (
+            <List>
+              {selectedConversation.messages.map((message, index) => (
+                <ListItem key={index}>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="subtitle2" color="primary">
+                          {message.role === 'user' ? selectedConversation.userId.name : 'Bot'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {format(new Date(message.timestamp), 'PPpp', { locale: tr })}
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={message.content}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+      </Dialog>
 
-        {/* Kategori Ekleme Dialog */}
-        <Dialog open={openCategoryDialog} onClose={() => setOpenCategoryDialog(false)}>
-          <DialogTitle>Yeni Kategori Ekle</DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Kategori Kodu"
-                  value={categoryForm.code}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, code: e.target.value })}
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Kategori Adı"
-                  value={categoryForm.name}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Açıklama"
-                  value={categoryForm.description}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                  margin="normal"
-                  multiline
-                  rows={3}
-                />
-              </Grid>
+      {/* Kategori Ekleme Dialog */}
+      <Dialog
+        open={openCategoryDialog}
+        onClose={() => setOpenCategoryDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Yeni Kategori Ekle</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Kategori Kodu"
+                value={categoryForm.code}
+                onChange={(e) => setCategoryForm({ ...categoryForm, code: e.target.value })}
+              />
             </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenCategoryDialog(false)}>İptal</Button>
-            <Button onClick={handleAddCategory} color="primary">
-              Ekle
-            </Button>
-          </DialogActions>
-        </Dialog>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Kategori Adı"
+                value={categoryForm.name}
+                onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Açıklama"
+                value={categoryForm.description}
+                onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                multiline
+                rows={3}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenCategoryDialog(false)}>İptal</Button>
+          <Button onClick={handleAddCategory} variant="contained" color="primary">
+            Ekle
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-        <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)}>
-          <DialogTitle>
-            {selectedUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}
-          </DialogTitle>
-          <DialogContent>
-            <TextField
-              margin="dense"
-              label="Ad"
-              type="text"
-              fullWidth
-              value={userForm.name}
-              onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-            />
-            <TextField
-              margin="dense"
-              label="E-posta"
-              type="email"
-              fullWidth
-              value={userForm.email}
-              onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-            />
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Rol</InputLabel>
-              <Select
-                value={userForm.role}
-                onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
-              >
-                <MenuItem value="user">Kullanıcı</MenuItem>
-                <MenuItem value="admin">Admin</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              margin="dense"
-              label="Şifre"
-              type="password"
-              fullWidth
-              value={userForm.password}
-              onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-              helperText={selectedUser ? 'Boş bırakırsanız şifre değişmez' : ''}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenUserDialog(false)}>İptal</Button>
-            <Button onClick={handleUpdateUser} color="primary">
-              Kaydet
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Container>
-    </Root>
+      {/* Kullanıcı Düzenleme Dialog */}
+      <Dialog
+        open={openUserDialog}
+        onClose={() => setOpenUserDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Ad"
+                value={userForm.name}
+                onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="E-posta"
+                type="email"
+                value={userForm.email}
+                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Rol</InputLabel>
+                <Select
+                  value={userForm.role}
+                  onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                  label="Rol"
+                >
+                  <MenuItem value="user">Öğrenci</MenuItem>
+                  <MenuItem value="admin">Admin</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Şifre"
+                type="password"
+                value={userForm.password}
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                helperText={selectedUser ? 'Boş bırakırsanız şifre değişmez' : ''}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenUserDialog(false)}>İptal</Button>
+          <Button onClick={handleUpdateUser} variant="contained" color="primary">
+            Kaydet
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
   );
 };
 
