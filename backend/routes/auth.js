@@ -72,7 +72,7 @@ const authMiddleware = async (req, res, next) => {
 const loginValidation = [
   check('email')
     .isEmail().withMessage('Geçerli bir email adresi giriniz')
-    .matches(/@(std\.)?yeditepe\.edu\.tr$/).withMessage('Geçerli bir Yeditepe e-posta adresi giriniz'),
+    .matches(/^[a-zA-Z0-9._%+-]+@(std\.)?yeditepe\.edu\.tr$/).withMessage('Geçerli bir Yeditepe e-posta adresi giriniz'),
   check('password')
     .exists().withMessage('Şifre gerekli')
     .isLength({ min: 6 }).withMessage('Şifre en az 6 karakter olmalıdır')
@@ -85,7 +85,7 @@ const registerValidation = [
     .isLength({ min: 2, max: 50 }).withMessage('İsim 2-50 karakter arasında olmalıdır'),
   check('email')
     .isEmail().withMessage('Geçerli bir email adresi giriniz')
-    .matches(/@(std\.)?yeditepe\.edu\.tr$/).withMessage('Geçerli bir Yeditepe e-posta adresi giriniz'),
+    .matches(/^[a-zA-Z0-9._%+-]+@(std\.)?yeditepe\.edu\.tr$/).withMessage('Geçerli bir Yeditepe e-posta adresi giriniz'),
   check('password')
     .isLength({ min: 6 }).withMessage('Şifre en az 6 karakter olmalıdır')
     .matches(/\d/).withMessage('Şifre en az bir rakam içermelidir')
@@ -96,52 +96,34 @@ const registerValidation = [
 // Giriş
 router.post('/login', async (req, res) => {
   try {
-    console.log('Giriş isteği alındı:', {
-      email: req.body.email,
-      hasPassword: !!req.body.password
-    });
-
     const { email, password } = req.body;
 
     if (!email || !password) {
-      console.log('Eksik bilgi:', { email: !!email, password: !!password });
       return res.status(400).json({ message: 'Email ve şifre zorunludur' });
     }
 
     const normalizedEmail = email.toLowerCase();
-    console.log('Normalized email:', normalizedEmail);
-
     const user = await User.findOne({ email: normalizedEmail });
-    console.log('Kullanıcı bulundu mu:', !!user);
 
     if (!user) {
-      console.log('Kullanıcı bulunamadı:', normalizedEmail);
       return res.status(401).json({ message: 'Email veya şifre hatalı' });
     }
 
-    // Hesap kilitli mi kontrol et
     if (user.isLocked()) {
       const lockTime = Math.ceil((user.lockUntil - Date.now()) / 1000 / 60);
-      console.log('Hesap kilitli:', normalizedEmail, lockTime);
       return res.status(401).json({ 
         message: `Hesabınız kilitlendi. ${lockTime} dakika sonra tekrar deneyin.` 
       });
     }
 
-    // Hesap onaylı mı kontrol et
     if (!user.isApproved && user.role !== 'admin') {
-      console.log('Hesap onaylanmamış:', normalizedEmail);
       return res.status(401).json({ message: 'Hesabınız henüz onaylanmamış' });
     }
 
-    // Şifre kontrolü
-    console.log('Şifre kontrolü yapılıyor...');
     const isMatch = await user.comparePassword(password);
-    console.log('Şifre eşleşti mi:', isMatch);
 
     if (!isMatch) {
       await user.incrementLoginAttempts();
-      console.log('Şifre hatalı, deneme sayısı artırıldı:', user.loginAttempts);
       
       if (user.isLocked()) {
         return res.status(401).json({ 
@@ -152,13 +134,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Email veya şifre hatalı' });
     }
 
-    // Başarılı giriş
     await user.successfulLogin();
-    console.log('Başarılı giriş:', normalizedEmail);
-    
-    // Token oluştur
     const token = generateToken(user);
-    console.log('Token oluşturuldu');
 
     res.json({
       token,
@@ -171,37 +148,31 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Giriş sırasında hata:', error);
-    res.status(500).json({ message: 'Sunucu hatası', error: error.message });
+    res.status(500).json({ message: 'Sunucu hatası' });
   }
 });
 
 // Admin kaydı
 router.post('/register-admin', async (req, res) => {
   try {
-    console.log('Admin kayıt isteği alındı:', req.body);
     const { password, name, email } = req.body;
 
-    // Validasyon
     if (!password || !name || !email) {
       return res.status(400).json({ message: 'İsim, email ve şifre zorunludur' });
     }
 
-    // Email formatı kontrolü
-    const emailRegex = /@yeditepe\.edu\.tr$/;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@(std\.)?yeditepe\.edu\.tr$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Sadece Yeditepe email adresleri kabul edilmektedir' });
+      return res.status(400).json({ message: 'Sadece @yeditepe.edu.tr veya @std.yeditepe.edu.tr uzantılı email adresleri kabul edilmektedir' });
     }
 
-    // Email kontrolü
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ message: 'Bu email adresi zaten kullanımda' });
     }
 
-    // Yeni admin oluştur
     const user = new User({
-      password, // Düz metin parola; pre-save hook burada hash yapacak
+      password,
       name,
       email: email.toLowerCase(),
       role: 'admin',
@@ -209,9 +180,7 @@ router.post('/register-admin', async (req, res) => {
     });
 
     await user.save();
-    console.log('Yeni admin oluşturuldu:', user);
 
-    // Token oluştur
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET || 'gizli-anahtar',
@@ -229,8 +198,7 @@ router.post('/register-admin', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Admin kaydı sırasında hata:', error);
-    res.status(500).json({ message: 'Sunucu hatası', error: error.message });
+    res.status(500).json({ message: 'Sunucu hatası' });
   }
 });
 
@@ -314,8 +282,8 @@ router.post('/register-request', registerValidation, async (req, res) => {
     }
 
     // Öğrenci e-posta kontrolü
-    if (!normalizedEmail.includes('@std.yeditepe.edu.tr')) {
-      return res.status(400).json({ message: 'Geçerli bir öğrenci e-posta adresi giriniz' });
+    if (!normalizedEmail.endsWith('@std.yeditepe.edu.tr')) {
+      return res.status(400).json({ message: 'Geçerli bir öğrenci e-posta adresi giriniz (@std.yeditepe.edu.tr)' });
     }
 
     const user = new User({
