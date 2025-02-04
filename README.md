@@ -1,6 +1,9 @@
 # Kurulum
 sudo apt install npm -y && curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && newgrp docker
 
+# Güvenlik duvarı ayarları
+sudo ufw allow 3000 && sudo ufw allow 5000 && sudo ufw allow 443 && sudo ufw allow 80
+
 # Docker Build ve Çalıştırma
 sudo docker-compose up --build -d  # Konteynerleri oluşturur ve arka planda çalıştırır
 
