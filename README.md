@@ -1,3 +1,6 @@
+Kurulum
+sudo apt install npm -y && curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && newgrp docker
+
 # Docker Build ve Çalıştırma
 sudo docker-compose up --build -d  # Konteynerleri oluşturur ve arka planda çalıştırır
 
