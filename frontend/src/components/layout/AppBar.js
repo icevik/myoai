@@ -47,7 +47,7 @@ const AppBar = () => {
       <Toolbar>
         <SchoolIcon sx={{ mr: 2 }} />
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          MyOAI
+          MYO AI
         </Typography>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

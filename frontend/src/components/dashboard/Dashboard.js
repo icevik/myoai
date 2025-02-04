@@ -37,7 +37,9 @@ import {
   Card,
   CardContent,
   CardActions,
-  Skeleton
+  Skeleton,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -69,6 +71,7 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useQuery, useQueryClient } from 'react-query';
+import ConversationHistory from './ConversationHistory';
 
 // Styled components
 const StyledContainer = styled(Container)(({ theme }) => ({
@@ -154,6 +157,11 @@ const Dashboard = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [favorites, setFavorites] = useState([]);
   const [error, setError] = useState('');
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [conversations, setConversations] = useState({});
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('courses');
 
   // React Query hooks
   const { data: coursesData, isLoading: coursesLoading } = useQuery('courses', async () => {
@@ -178,7 +186,11 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      const scrollHeight = messageListRef.current.scrollHeight;
+      messageListRef.current.scrollTo({
+        top: scrollHeight,
+        behavior: 'smooth'
+      });
     }
   }, [messages]);
 
@@ -190,16 +202,45 @@ const Dashboard = () => {
   };
 
   const filteredCourses = coursesData?.filter(course => {
-    const matchesSearch = course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         course.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || course.category === selectedCategory;
+    const matchesSearch = searchTerm ? (
+      course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      course.code.toLowerCase().includes(searchTerm.toLowerCase())
+    ) : true;
+
+    const matchesCategory = selectedCategory === 'all' 
+      ? true 
+      : selectedCategory === 'favorites'
+      ? favorites.includes(course._id)
+      : course.category?._id === selectedCategory;
+
     return matchesSearch && matchesCategory;
   });
+
+  useEffect(() => {
+    if (selectedCategory !== 'all' && selectedCategory !== 'favorites') {
+      queryClient.invalidateQueries(['courses', selectedCategory]);
+    }
+  }, [selectedCategory]);
 
   const handleCourseSelect = async (course) => {
     setSelectedCourse(course);
     setMessages([]);
     setError('');
+    
+    // Yeni konuşma başlat
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/chat/conversations/new`,
+        { courseId: course._id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setCurrentSessionId(response.data.conversationId);
+    } catch (error) {
+      console.error('Yeni konuşma başlatılırken hata:', error);
+      setError('Yeni konuşma başlatılamadı');
+      return;
+    }
     
     if (course.welcomeMessage) {
       setMessages([{
@@ -212,17 +253,32 @@ const Dashboard = () => {
     if (isMobile) {
       setDrawerOpen(false);
     }
+  };
 
+  const resetConversation = async () => {
+    if (!selectedCourse) return;
+    
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(
-        `${API_URL}/chat/conversations?courseId=${course._id}`,
+      const response = await axios.post(
+        `${API_URL}/chat/conversations/new`,
+        { courseId: selectedCourse._id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // Konuşma geçmişini işle
+      
+      setCurrentSessionId(response.data.conversationId);
+      setMessages([]);
+      
+      if (selectedCourse.welcomeMessage) {
+        setMessages([{
+          role: 'assistant',
+          content: selectedCourse.welcomeMessage,
+          timestamp: new Date()
+        }]);
+      }
     } catch (error) {
-      console.error('Konuşma geçmişi yüklenirken hata:', error);
-      setError('Konuşma geçmişi yüklenirken bir hata oluştu');
+      console.error('Konuşma sıfırlanırken hata:', error);
+      setError('Konuşma sıfırlanamadı');
     }
   };
 
@@ -232,22 +288,69 @@ const Dashboard = () => {
 
     try {
       setLoading(true);
+      setError('');
+
+      // Kullanıcı mesajını hemen göster
+      const userMessage = {
+        role: 'user',
+        content: newMessage,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setNewMessage('');
+
+      console.log('Mesaj gönderiliyor:', {
+        courseCode: selectedCourse.code,
+        messageLength: newMessage.length
+      });
+
       const token = localStorage.getItem('token');
       const response = await axios.post(
         `${API_URL}/chat/${selectedCourse.code}`,
         { message: newMessage },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000 // 30 saniye timeout
+        }
       );
 
-      setMessages(prev => [
-        ...prev,
-        { role: 'user', content: newMessage, timestamp: new Date() },
-        { role: 'assistant', content: response.data.message, timestamp: new Date() }
-      ]);
-      setNewMessage('');
+      console.log('API yanıtı:', {
+        status: response.status,
+        hasMessage: !!response.data?.message,
+        messageLength: response.data?.message?.length
+      });
+
+      if (response.data?.message) {
+        const assistantMessage = {
+          role: 'assistant',
+          content: response.data.message,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      } else {
+        throw new Error('API yanıtı boş');
+      }
     } catch (error) {
-      console.error('Mesaj gönderilirken hata:', error);
-      setError('Mesaj gönderilirken bir hata oluştu');
+      console.error('Mesaj gönderme hatası:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+
+      // Hata mesajını göster
+      setError(
+        error.response?.data?.message ||
+        error.message ||
+        'Mesaj gönderilirken bir hata oluştu'
+      );
+
+      // Timeout hatası
+      if (error.code === 'ECONNABORTED') {
+        setError('Sunucu yanıt vermedi, lütfen tekrar deneyin');
+      }
     } finally {
       setLoading(false);
     }
@@ -323,90 +426,182 @@ const Dashboard = () => {
     ));
   };
 
+  // Konuşma geçmişini yükle
+  const loadConversations = async (courseId) => {
+    try {
+      setConversationsLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_URL}/chat/conversations${courseId ? `?courseId=${courseId}` : ''}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setConversations(response.data.conversations);
+    } catch (error) {
+      console.error('Konuşma geçmişi yüklenirken hata:', error);
+      setError('Konuşma geçmişi yüklenemedi');
+    } finally {
+      setConversationsLoading(false);
+    }
+  };
+
+  // Konuşma detayını yükle
+  const loadConversationDetail = async (conversationId) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_URL}/chat/conversations/${conversationId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setMessages(response.data.messages);
+      setSelectedConversation(response.data);
+    } catch (error) {
+      console.error('Konuşma detayı yüklenirken hata:', error);
+      setError('Konuşma detayı yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <StyledContainer maxWidth="xl">
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Ders ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                )
-              }}
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={selectedCategory === 'favorites'}
-                  onChange={(e) => setSelectedCategory(e.target.checked ? 'favorites' : 'all')}
-                />
-              }
-              label="Favoriler"
-            />
-          </Box>
-        </Grid>
+      <Box sx={{ mb: 3 }}>
+        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
+          <Tab label="Dersler" value="courses" />
+          <Tab label="Konuşma Geçmişi" value="history" />
+        </Tabs>
+      </Box>
 
-        <Grid item xs={12}>
-          <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-            <Chip
-              label="Tümü"
-              onClick={() => setSelectedCategory('all')}
-              color={selectedCategory === 'all' ? 'primary' : 'default'}
-              variant={selectedCategory === 'all' ? 'filled' : 'outlined'}
-            />
-            {categoriesData?.map(category => (
-              <Chip
-                key={category._id}
-                label={category.name}
-                onClick={() => setSelectedCategory(category._id)}
-                color={selectedCategory === category._id ? 'primary' : 'default'}
-                variant={selectedCategory === category._id ? 'filled' : 'outlined'}
-              />
-            ))}
-          </Box>
-        </Grid>
-
-        {error && (
+      {activeTab === 'courses' ? (
+        <Grid container spacing={3}>
           <Grid item xs={12}>
-            <Alert severity="error" onClose={() => setError('')}>
-              {error}
-            </Alert>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder="Ders ara..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  )
+                }}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={selectedCategory === 'favorites'}
+                    onChange={(e) => setSelectedCategory(e.target.checked ? 'favorites' : 'all')}
+                  />
+                }
+                label="Favoriler"
+              />
+            </Box>
           </Grid>
-        )}
 
-        <AnimatePresence>
-          {renderCourseGrid()}
-        </AnimatePresence>
-      </Grid>
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+              <Chip
+                label="Tümü"
+                onClick={() => setSelectedCategory('all')}
+                color={selectedCategory === 'all' ? 'primary' : 'default'}
+                variant={selectedCategory === 'all' ? 'filled' : 'outlined'}
+              />
+              {categoriesData?.map(category => (
+                <Chip
+                  key={category._id}
+                  label={category.name}
+                  onClick={() => setSelectedCategory(category._id)}
+                  color={selectedCategory === category._id ? 'primary' : 'default'}
+                  variant={selectedCategory === category._id ? 'filled' : 'outlined'}
+                />
+              ))}
+            </Box>
+          </Grid>
+
+          {error && (
+            <Grid item xs={12}>
+              <Alert severity="error" onClose={() => setError('')}>
+                {error}
+              </Alert>
+            </Grid>
+          )}
+
+          <AnimatePresence>
+            {renderCourseGrid()}
+          </AnimatePresence>
+        </Grid>
+      ) : (
+        <ConversationHistory />
+      )}
 
       <Dialog
         open={!!selectedCourse}
         fullScreen={isMobile}
         maxWidth="md"
         fullWidth
-        onClose={() => setSelectedCourse(null)}
+        onClose={() => {
+          setSelectedCourse(null);
+          setCurrentSessionId(null);
+        }}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="h6">
               {selectedCourse?.name} ({selectedCourse?.code})
             </Typography>
-            <IconButton onClick={() => setSelectedCourse(null)}>
-              <CloseIcon />
-            </IconButton>
+            <Box>
+              <Tooltip title="Konuşmayı Sıfırla">
+                <IconButton onClick={resetConversation} sx={{ mr: 1 }}>
+                  <DeleteIcon />
+                </IconButton>
+              </Tooltip>
+              <IconButton onClick={() => {
+                setSelectedCourse(null);
+                setCurrentSessionId(null);
+              }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
           </Box>
         </DialogTitle>
-        <DialogContent dividers>
+        <DialogContent 
+          dividers 
+          sx={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            height: '70vh'
+          }}
+        >
           <ChatContainer>
-            <MessageList ref={messageListRef}>
+            <MessageList 
+              ref={messageListRef}
+              sx={{
+                overflowY: 'auto',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                p: 2,
+                '&::-webkit-scrollbar': {
+                  width: '8px',
+                },
+                '&::-webkit-scrollbar-track': {
+                  background: 'transparent',
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  background: theme.palette.divider,
+                  borderRadius: '4px',
+                },
+                '&::-webkit-scrollbar-thumb:hover': {
+                  background: theme.palette.action.hover,
+                },
+              }}
+            >
               <AnimatePresence>
                 {messages.map((message, index) => (
                   <MessageBubble

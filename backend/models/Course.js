@@ -76,10 +76,31 @@ courseSchema.methods.isApiConfigComplete = function() {
 
 // Kullanıcının kursa erişim izni var mı kontrol et
 courseSchema.methods.hasAccess = function(userId) {
-  return this.isActive && (
-    this.isPublic || 
-    this.allowedUsers.includes(userId)
-  );
+  if (!this.isActive) return false;
+  if (!userId) return false;
+
+  // Admin her zaman erişebilir
+  if (this.isPublic) return true;
+  
+  // Kullanıcı listesini kontrol et
+  return this.allowedUsers.some(id => id.toString() === userId.toString());
 };
+
+// Pre-save middleware
+courseSchema.pre('save', function(next) {
+  // API yapılandırması tam değilse kaydetme
+  if (!this.isApiConfigComplete()) {
+    next(new Error('API yapılandırması eksik'));
+    return;
+  }
+
+  // Tarih alanlarını güncelle
+  this.updatedAt = new Date();
+  if (!this.createdAt) {
+    this.createdAt = new Date();
+  }
+
+  next();
+});
 
 module.exports = mongoose.model('Course', courseSchema); 

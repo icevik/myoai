@@ -41,7 +41,8 @@ import {
   Edit as EditIcon,
   Check as CheckIcon,
   Block as BlockIcon,
-  Chat as ChatIcon
+  Chat as ChatIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
@@ -92,6 +93,7 @@ const AdminDashboard = () => {
   });
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [error, setError] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -113,7 +115,10 @@ const AdminDashboard = () => {
 
       setUsers(usersRes.data);
       setCourses(coursesRes.data);
-      setConversations(conversationsRes.data);
+      const conversationArray = Object.values(conversationsRes.data.conversations)
+        .flat()
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      setConversations(conversationArray);
       setCategories(categoriesRes.data);
     } catch (error) {
       console.error('Veri yüklenirken hata:', error);
@@ -233,7 +238,14 @@ const AdminDashboard = () => {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      setSelectedConversation(response.data);
+      
+      const conversation = {
+        ...response.data,
+        user: users.find(u => u._id === response.data.user),
+        course: courses.find(c => c._id === response.data.course)
+      };
+      
+      setSelectedConversation(conversation);
       setOpenChatDialog(true);
     } catch (error) {
       console.error('Konuşma detayları alınırken hata:', error);
@@ -257,13 +269,34 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleEditCategory = (category) => {
+    setSelectedCategory(category);
+    setCategoryForm({
+      code: category.code,
+      name: category.name,
+      description: category.description || ''
+    });
+    setOpenCategoryDialog(true);
+  };
+
   const handleAddCategory = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API_URL}/categories`, categoryForm, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      if (selectedCategory) {
+        await axios.put(
+          `${API_URL}/categories/${selectedCategory._id}`,
+          categoryForm,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } else {
+        await axios.post(
+          `${API_URL}/categories`,
+          categoryForm,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
       setOpenCategoryDialog(false);
+      setSelectedCategory(null);
       setCategoryForm({
         code: '',
         name: '',
@@ -271,8 +304,8 @@ const AdminDashboard = () => {
       });
       loadData();
     } catch (error) {
-      console.error('Kategori eklenirken hata:', error);
-      setError('Kategori eklenirken bir hata oluştu');
+      console.error('Kategori işlemi sırasında hata:', error);
+      setError('Kategori işlemi sırasında bir hata oluştu');
     }
   };
 
@@ -459,7 +492,15 @@ const AdminDashboard = () => {
                 <Button
                   variant="contained"
                   startIcon={<AddIcon />}
-                  onClick={() => setOpenCategoryDialog(true)}
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    setCategoryForm({
+                      code: '',
+                      name: '',
+                      description: ''
+                    });
+                    setOpenCategoryDialog(true);
+                  }}
                   sx={{ mb: 3 }}
                 >
                   Yeni Kategori Ekle
@@ -483,8 +524,16 @@ const AdminDashboard = () => {
                         <TableCell>{category.description}</TableCell>
                         <TableCell>
                           <IconButton
+                            color="primary"
+                            onClick={() => handleEditCategory(category)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton
                             color="error"
                             onClick={() => handleDeleteCategory(category._id)}
+                            size="small"
                           >
                             <DeleteIcon />
                           </IconButton>
@@ -556,47 +605,64 @@ const AdminDashboard = () => {
           {tabValue === 3 && (
             <Paper elevation={0}>
               <List>
-                {conversations.map((conversation) => (
-                  <React.Fragment key={conversation._id}>
-                    <ListItem
-                      secondaryAction={
-                        <>
-                          <IconButton
-                            edge="end"
-                            onClick={() => handleViewConversation(conversation._id)}
-                          >
-                            <ChatIcon />
-                          </IconButton>
-                          <IconButton
-                            edge="end"
-                            color="error"
-                            onClick={() => handleDeleteConversation(conversation._id)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </>
-                      }
-                    >
-                      <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="subtitle1">
-                              {conversation.userId.name}
-                            </Typography>
-                            <Chip
-                              label={conversation.courseCode}
-                              size="small"
-                              color="primary"
-                              variant="outlined"
-                            />
-                          </Box>
+                {conversations.length > 0 ? (
+                  conversations.map((conversation) => (
+                    <React.Fragment key={conversation._id}>
+                      <ListItem
+                        secondaryAction={
+                          <>
+                            <IconButton
+                              edge="end"
+                              onClick={() => handleViewConversation(conversation._id)}
+                            >
+                              <ChatIcon />
+                            </IconButton>
+                            <IconButton
+                              edge="end"
+                              color="error"
+                              onClick={() => handleDeleteConversation(conversation._id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </>
                         }
-                        secondary={format(new Date(conversation.lastMessageAt), 'PPpp', { locale: tr })}
-                      />
-                    </ListItem>
-                    <Divider />
-                  </React.Fragment>
-                ))}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="subtitle1">
+                                {conversation.user?.name || 'Kullanıcı'}
+                              </Typography>
+                              <Chip
+                                label={conversation.course?.code || 'Ders Kodu'}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <>
+                              <Typography variant="body2" color="text.secondary">
+                                Son mesaj: {conversation.lastMessage?.substring(0, 50)}...
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {format(new Date(conversation.updatedAt), 'dd MMM yyyy HH:mm', { locale: tr })}
+                              </Typography>
+                            </>
+                          }
+                        />
+                      </ListItem>
+                      <Divider />
+                    </React.Fragment>
+                  ))
+                ) : (
+                  <Box sx={{ p: 3, textAlign: 'center' }}>
+                    <Typography color="text.secondary">
+                      Henüz konuşma bulunmuyor
+                    </Typography>
+                  </Box>
+                )}
               </List>
             </Paper>
           )}
@@ -808,13 +874,14 @@ const AdminDashboard = () => {
         fullWidth
       >
         <DialogTitle>
-          Konuşma Detayı
-          <IconButton
-            onClick={() => setOpenChatDialog(false)}
-            sx={{ position: 'absolute', right: 8, top: 8 }}
-          >
-            <DeleteIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">
+              Konuşma Detayı - {selectedConversation?.course?.name || 'Yükleniyor...'}
+            </Typography>
+            <IconButton onClick={() => setOpenChatDialog(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
         </DialogTitle>
         <DialogContent>
           {selectedConversation && (
@@ -825,14 +892,21 @@ const AdminDashboard = () => {
                     primary={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="subtitle2" color="primary">
-                          {message.role === 'user' ? selectedConversation.userId.name : 'Bot'}
+                          {message.role === 'user' ? selectedConversation.user?.name || 'Kullanıcı' : 'Bot'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {format(new Date(message.timestamp), 'PPpp', { locale: tr })}
+                          {format(new Date(message.timestamp), 'dd MMM yyyy HH:mm', { locale: tr })}
                         </Typography>
                       </Box>
                     }
-                    secondary={message.content}
+                    secondary={
+                      <Typography 
+                        variant="body2" 
+                        sx={{ whiteSpace: 'pre-wrap', mt: 1 }}
+                      >
+                        {message.content}
+                      </Typography>
+                    }
                   />
                 </ListItem>
               ))}
@@ -841,14 +915,24 @@ const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Kategori Ekleme Dialog */}
+      {/* Kategori Dialog */}
       <Dialog
         open={openCategoryDialog}
-        onClose={() => setOpenCategoryDialog(false)}
+        onClose={() => {
+          setOpenCategoryDialog(false);
+          setSelectedCategory(null);
+          setCategoryForm({
+            code: '',
+            name: '',
+            description: ''
+          });
+        }}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Yeni Kategori Ekle</DialogTitle>
+        <DialogTitle>
+          {selectedCategory ? 'Kategori Düzenle' : 'Yeni Kategori Ekle'}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -857,6 +941,7 @@ const AdminDashboard = () => {
                 label="Kategori Kodu"
                 value={categoryForm.code}
                 onChange={(e) => setCategoryForm({ ...categoryForm, code: e.target.value })}
+                disabled={!!selectedCategory}
               />
             </Grid>
             <Grid item xs={12}>
@@ -880,9 +965,19 @@ const AdminDashboard = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenCategoryDialog(false)}>İptal</Button>
+          <Button onClick={() => {
+            setOpenCategoryDialog(false);
+            setSelectedCategory(null);
+            setCategoryForm({
+              code: '',
+              name: '',
+              description: ''
+            });
+          }}>
+            İptal
+          </Button>
           <Button onClick={handleAddCategory} variant="contained" color="primary">
-            Ekle
+            {selectedCategory ? 'Güncelle' : 'Ekle'}
           </Button>
         </DialogActions>
       </Dialog>
