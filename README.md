@@ -11,7 +11,7 @@ sudo apt-get install docker-compose-plugin
 sudo mkdir -p /usr/local/lib/docker/cli-plugins/
 sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
 sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-
+fefe
 # Güvenlik duvarı ayarları
 sudo ufw allow 3000 && sudo ufw allow 5000 && sudo ufw allow 443 && sudo ufw allow 80
 
