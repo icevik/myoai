@@ -119,7 +119,7 @@ export const AuthProvider = ({ children }) => {
       } else if (error.message) {
         throw error.message;
       } else {
-        throw 'Giriş yapılırken bir hata oluştu';
+        throw 'Giriş yapılırken bir hata oluştu lütfen kullanıcı adınızı ve şifrenizi kontrol ediniz.';
       }
     }
   };

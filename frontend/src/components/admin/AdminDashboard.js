@@ -810,7 +810,7 @@ const AdminDashboard = () => {
                   ...courseForm,
                   apiConfig: { ...courseForm.apiConfig, host: e.target.value }
                 })}
-                helperText="Örnek: https://www.example.com"
+                helperText="Örnek: https://www.knowhy.site"
               />
             </Grid>
             <Grid item xs={12} md={6}>
@@ -822,6 +822,7 @@ const AdminDashboard = () => {
                   ...courseForm,
                   apiConfig: { ...courseForm.apiConfig, chatbotId: e.target.value }
                 })}
+                helperText="Örnek: e041f668-da0e-45ce-bb3a-b63633747900"
               />
             </Grid>
             <Grid item xs={12} md={6}>
@@ -834,6 +835,7 @@ const AdminDashboard = () => {
                   apiConfig: { ...courseForm.apiConfig, securityKey: e.target.value }
                 })}
                 type="password"
+                helperText="Örnek: fwtHfA4ELjKJQLRCrlSZ20KzmiYYEu4urcyDG2Z-5Pk"
               />
             </Grid>
           </Grid>

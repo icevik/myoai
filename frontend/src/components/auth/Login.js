@@ -93,7 +93,7 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Giriş hatası:', error);
-      setError(typeof error === 'string' ? error : 'Giriş yapılırken bir hata oluştu');
+      setError(typeof error === 'string' ? error : 'Giriş yapılırken bir hata oluştu. Lütfen kullanıcı adınızı ve şifrenizi kontrol ediniz.');
     }
   };
 
