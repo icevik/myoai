@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { useHistory, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Toolbar,
@@ -28,7 +28,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 const Layout = ({ children }) => {
-  const history = useHistory();
+  const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -131,18 +131,18 @@ const Layout = ({ children }) => {
 
   const handleProfile = () => {
     handleClose();
-    history.push('/profile');
+    navigate('/profile');
   };
 
   const handleDashboard = () => {
     handleClose();
-    history.push(user?.role === 'admin' ? '/admin' : '/dashboard');
+    navigate(user?.role === 'admin' ? '/admin' : '/dashboard');
   };
 
   const handleLogout = () => {
     handleClose();
     logout();
-    history.push('/');
+    navigate('/');
   };
 
   const toggleDarkMode = () => {

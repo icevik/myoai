@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -41,7 +41,7 @@ const StyledLink = styled(Link)(({ theme }) => ({
 }));
 
 const Register = () => {
-  const history = useHistory();
+  const navigate = useNavigate();
   const { register } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
@@ -69,7 +69,7 @@ const Register = () => {
       const message = await register(formData.name, formData.email, formData.password);
       setSuccess(message);
       setTimeout(() => {
-        history.push('/');
+        navigate('/dashboard');
       }, 3000);
     } catch (error) {
       setError(error.toString());

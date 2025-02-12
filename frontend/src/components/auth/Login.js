@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -41,7 +41,7 @@ const StyledLink = styled(Link)(({ theme }) => ({
 }));
 
 const Login = () => {
-  const history = useHistory();
+  const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
@@ -87,9 +87,9 @@ const Login = () => {
       });
 
       if (user && user.role === 'admin') {
-        history.push('/admin');
+        navigate('/admin');
       } else {
-        history.push('/dashboard');
+        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Giriş hatası:', error);

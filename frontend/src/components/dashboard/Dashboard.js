@@ -142,6 +142,20 @@ const SearchBox = styled(TextField)(({ theme }) => ({
   marginBottom: theme.spacing(2)
 }));
 
+const CourseDialog = styled(Dialog)(({ theme }) => ({
+  '& .MuiDialog-paper': {
+    width: '100%',
+    maxWidth: 800,
+    height: '80vh',
+    maxHeight: 800
+  }
+}));
+
+const DocumentList = styled(List)(({ theme }) => ({
+  maxHeight: 400,
+  overflow: 'auto'
+}));
+
 const Dashboard = () => {
   const queryClient = useQueryClient();
   const theme = useTheme();
@@ -162,6 +176,10 @@ const Dashboard = () => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('courses');
+  const [courseDialogOpen, setCourseDialogOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef(null);
 
   // React Query hooks
   const { data: coursesData, isLoading: coursesLoading } = useQuery('courses', async () => {
@@ -464,6 +482,234 @@ const Dashboard = () => {
     }
   };
 
+  const handleCourseRequest = async (courseData) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_URL}/courses/request`, courseData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      queryClient.invalidateQueries('courses');
+      setCourseDialogOpen(false);
+    } catch (error) {
+      console.error('Ders talebi oluşturulurken hata:', error);
+      setError('Ders talebi oluşturulamadı');
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    const files = Array.from(event.target.files);
+    setSelectedFiles(prevFiles => [...prevFiles, ...files]);
+  };
+
+  const handleFileUpload = async () => {
+    if (!selectedCourse || selectedFiles.length === 0) return;
+
+    const formData = new FormData();
+    selectedFiles.forEach(file => {
+      formData.append('documents', file);
+    });
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/courses/${selectedCourse.code}/documents`,
+        formData,
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          onUploadProgress: (progressEvent) => {
+            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(progress);
+          }
+        }
+      );
+
+      setSelectedFiles([]);
+      setUploadProgress(0);
+      queryClient.invalidateQueries(['courses', selectedCourse.code]);
+    } catch (error) {
+      console.error('Doküman yüklenirken hata:', error);
+      setError('Doküman yüklenemedi');
+    }
+  };
+
+  const handleFileDelete = async (documentId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(
+        `${API_URL}/courses/${selectedCourse.code}/documents/${documentId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      queryClient.invalidateQueries(['courses', selectedCourse.code]);
+    } catch (error) {
+      console.error('Doküman silinirken hata:', error);
+      setError('Doküman silinemedi');
+    }
+  };
+
+  const handleApiConfigUpdate = async (apiConfig) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${API_URL}/courses/${selectedCourse.code}/api-config`,
+        apiConfig,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      queryClient.invalidateQueries(['courses', selectedCourse.code]);
+    } catch (error) {
+      console.error('API yapılandırması güncellenirken hata:', error);
+      setError('API yapılandırması güncellenemedi');
+    }
+  };
+
+  const renderCourseDialog = () => (
+    <CourseDialog open={courseDialogOpen} onClose={() => setCourseDialogOpen(false)}>
+      <DialogTitle>Yeni Ders Talebi</DialogTitle>
+      <DialogContent>
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Ders Kodu"
+              name="code"
+              required
+              margin="normal"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Ders Adı"
+              name="name"
+              required
+              margin="normal"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Açıklama"
+              name="description"
+              multiline
+              rows={4}
+              margin="normal"
+            />
+          </Grid>
+          {/* Kategori seçimi */}
+          {/* ... */}
+        </Grid>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setCourseDialogOpen(false)}>İptal</Button>
+        <Button variant="contained" color="primary" onClick={handleCourseRequest}>
+          Talep Oluştur
+        </Button>
+      </DialogActions>
+    </CourseDialog>
+  );
+
+  const renderDocumentSection = () => (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="h6" gutterBottom>
+        Dokümanlar
+      </Typography>
+      <input
+        type="file"
+        multiple
+        accept=".pdf,.doc,.docx,.txt,.ppt,.pptx"
+        style={{ display: 'none' }}
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+      />
+      <Button
+        variant="contained"
+        startIcon={<NoteIcon />}
+        onClick={() => fileInputRef.current?.click()}
+        sx={{ mb: 2 }}
+      >
+        Doküman Seç
+      </Button>
+      {selectedFiles.length > 0 && (
+        <>
+          <List>
+            {selectedFiles.map((file, index) => (
+              <ListItem key={index}>
+                <ListItemText primary={file.name} />
+                <IconButton onClick={() => setSelectedFiles(files => files.filter((_, i) => i !== index))}>
+                  <DeleteIcon />
+                </IconButton>
+              </ListItem>
+            ))}
+          </List>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleFileUpload}
+            disabled={uploadProgress > 0}
+          >
+            {uploadProgress > 0 ? `Yükleniyor... ${uploadProgress}%` : 'Yükle'}
+          </Button>
+        </>
+      )}
+      {selectedCourse?.documents && (
+        <DocumentList>
+          {selectedCourse.documents.map((doc) => (
+            <ListItem key={doc._id}>
+              <ListItemText
+                primary={doc.title}
+                secondary={format(new Date(doc.uploadedAt), 'dd MMMM yyyy HH:mm', { locale: tr })}
+              />
+              <IconButton onClick={() => handleFileDelete(doc._id)}>
+                <DeleteIcon />
+              </IconButton>
+            </ListItem>
+          ))}
+        </DocumentList>
+      )}
+    </Box>
+  );
+
+  const renderApiConfigSection = () => (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="h6" gutterBottom>
+        API Yapılandırması
+      </Typography>
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            label="API Host"
+            value={selectedCourse?.apiConfig?.host || ''}
+            onChange={(e) => handleApiConfigUpdate({ ...selectedCourse?.apiConfig, host: e.target.value })}
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            label="Chatbot ID"
+            value={selectedCourse?.apiConfig?.chatbotId || ''}
+            onChange={(e) => handleApiConfigUpdate({ ...selectedCourse?.apiConfig, chatbotId: e.target.value })}
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            label="Security Key"
+            type="password"
+            value={selectedCourse?.apiConfig?.securityKey || ''}
+            onChange={(e) => handleApiConfigUpdate({ ...selectedCourse?.apiConfig, securityKey: e.target.value })}
+          />
+        </Grid>
+      </Grid>
+    </Box>
+  );
+
   return (
     <StyledContainer maxWidth="xl">
       <Box sx={{ mb: 3 }}>
@@ -675,6 +921,23 @@ const Dashboard = () => {
           </ChatContainer>
         </DialogContent>
       </Dialog>
+
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<NoteIcon />}
+              onClick={() => setCourseDialogOpen(true)}
+            >
+              Ders Talebi Oluştur
+            </Button>
+          </Box>
+        </Grid>
+        {renderCourseDialog()}
+        {renderDocumentSection()}
+        {renderApiConfigSection()}
+      </Grid>
     </StyledContainer>
   );
 };

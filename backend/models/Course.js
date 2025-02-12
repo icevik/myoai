@@ -1,5 +1,38 @@
 const mongoose = require('mongoose');
 
+const documentSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Doküman başlığı zorunludur'],
+    trim: true
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  fileUrl: {
+    type: String,
+    required: [true, 'Doküman URL zorunludur']
+  },
+  fileType: {
+    type: String,
+    required: [true, 'Dosya tipi zorunludur']
+  },
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  },
+  lastModified: {
+    type: Date,
+    default: Date.now
+  }
+});
+
 const courseSchema = new mongoose.Schema({
   code: {
     type: String,
@@ -25,26 +58,29 @@ const courseSchema = new mongoose.Schema({
   apiConfig: {
     host: {
       type: String,
-      required: [true, 'API host adresi zorunludur'],
       validate: {
         validator: function(v) {
-          return /^https?:\/\/.+/.test(v);
+          return !v || /^https?:\/\/.+/.test(v);
         },
         message: 'Geçerli bir API host adresi giriniz (http:// veya https:// ile başlamalı)'
       }
     },
     chatbotId: {
-      type: String,
-      required: [true, 'Chatbot ID zorunludur']
+      type: String
     },
     securityKey: {
-      type: String,
-      required: [true, 'API güvenlik anahtarı zorunludur']
+      type: String
     }
+  },
+  documents: [documentSchema],
+  status: {
+    type: String,
+    enum: ['draft', 'pending', 'active', 'inactive'],
+    default: 'draft'
   },
   isActive: {
     type: Boolean,
-    default: true
+    default: false
   },
   isPublic: {
     type: Boolean,
@@ -54,6 +90,11 @@ const courseSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -79,19 +120,16 @@ courseSchema.methods.hasAccess = function(userId) {
   if (!this.isActive) return false;
   if (!userId) return false;
 
-  // Admin her zaman erişebilir
   if (this.isPublic) return true;
-  
-  // Kullanıcı listesini kontrol et
   return this.allowedUsers.some(id => id.toString() === userId.toString());
 };
 
 // Pre-save middleware
 courseSchema.pre('save', function(next) {
-  // API yapılandırması tam değilse kaydetme
-  if (!this.isApiConfigComplete()) {
-    next(new Error('API yapılandırması eksik'));
-    return;
+  // API yapılandırması tam ise ve status draft/pending ise active yap
+  if (this.isApiConfigComplete() && ['draft', 'pending'].includes(this.status)) {
+    this.status = 'active';
+    this.isActive = true;
   }
 
   // Tarih alanlarını güncelle

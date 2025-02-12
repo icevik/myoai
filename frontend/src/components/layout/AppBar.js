@@ -1,5 +1,5 @@
 import React from 'react';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   AppBar as MuiAppBar,
   Toolbar,
@@ -19,7 +19,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 const AppBar = () => {
-  const history = useHistory();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = React.useState(null);
 
@@ -33,13 +33,13 @@ const AppBar = () => {
 
   const handleProfile = () => {
     handleClose();
-    history.push('/profile');
+    navigate('/profile');
   };
 
   const handleLogout = () => {
     handleClose();
     logout();
-    history.push('/');
+    navigate('/');
   };
 
   return (

@@ -1,7 +1,9 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from 'react-query';
+import Button from '@mui/material/Button';
+import * as Sentry from "@sentry/react";
 
 // Components
 import Login from './components/auth/Login';
@@ -33,14 +35,23 @@ function App() {
       <AuthProvider>
         <Router>
           <Layout>
-            <Switch>
-              <Route exact path="/" component={Login} />
-              <Route exact path="/register" component={Register} />
-              <PrivateRoute exact path="/dashboard" component={Dashboard} />
-              <PrivateRoute exact path="/profile" component={Profile} />
-              <AdminRoute exact path="/admin" component={AdminDashboard} />
-              <Redirect to="/" />
-            </Switch>
+            <Routes>
+              <Route path="/" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                path="/dashboard"
+                element={<PrivateRoute><Dashboard /></PrivateRoute>}
+              />
+              <Route
+                path="/profile"
+                element={<PrivateRoute><Profile /></PrivateRoute>}
+              />
+              <Route
+                path="/admin"
+                element={<AdminRoute><AdminDashboard /></AdminRoute>}
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </Layout>
         </Router>
       </AuthProvider>
@@ -48,4 +59,4 @@ function App() {
   );
 }
 
-export default App;
+export default Sentry.withProfiler(App);
